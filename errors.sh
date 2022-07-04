@@ -1,0 +1,1 @@
+declare -a COMPILE_ERROR__SYNTAX_ERROR=1
