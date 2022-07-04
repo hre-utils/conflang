@@ -34,9 +34,10 @@ aArrays  ::
 iArrays  ::
    `get()`, `len()`
 Paths    ::
-   `exists()`, `is_empty()`, `is_dir()`
+   `is_owner(STRING)`, `has_execute(STRING)`, `exists()`, `is_empty()`, `is_dir()`
 
 Methods are only comparisons, or `"query"`-based operators used to assert state in validation.
+They can have no side-effects.
 
 
 === FFI
@@ -199,6 +200,8 @@ Reads user & programmer's `.cfg` files.
 Parses into an internal bash representation of the data.
 Creates symbol table.
 Dumps resulting compiled functions & arrays, ideally w/ `declare -p ; declare -f`.
+
+Ideally need to be able to re-use the lexer, parser, and compiler for both parts of the config file.
 
 === API
 

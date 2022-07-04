@@ -7,7 +7,7 @@
 # `SCANNER' section. The exception are vars used throughout the entire file,
 # such as the TOKENS array.
 
-set -e
+#set -e
 
 #══════════════════════════════════╡ GLOBALS ╞══════════════════════════════════
 INPUT_FILE="${1:-/dev/stdin}"
@@ -47,17 +47,18 @@ function Token {
 
    # Nameref to newly created global token.
    declare -n t="$tname"
+
+   # Token data.
    t[type]="$type"
    t[value]="$value"
 
-   # TODO:
-   # Cursor information. Not sure if I'm going to actually use this at first.
-   # Feels like it's adding initlaly unneeded complexity.
-   #t[offset]=${FREEZE[offset]}
-   #t[lineno]=${FREEZE[lineno]}
-   #t[colno]=${FREEZE[colno]}
+   # Cursor information (position in file & line).
+   t[offset]=${FREEZE[offset]}
+   t[lineno]=${FREEZE[lineno]}
+   t[colno]=${FREEZE[colno]}
 
    TOKENS+=( "$tname" ) ; (( TOKEN_NUM++ ))
+   #echo "[${t[lineno]}:${t[colno]}] ${type} [${value}]"
 }
 
                                      
@@ -83,7 +84,7 @@ function advance {
    CURRENT=${CHARRAY[CURSOR[offset]]}
    PEEK=${CHARRAY[CURSOR[offset]+1]}
 
-   if [[ CURRENT == $'\n' ]] ; then
+   if [[ $CURRENT == $'\n' ]] ; then
       ((CURSOR[lineno]++))
       CURSOR[colno]=0
    fi
@@ -91,33 +92,41 @@ function advance {
 
 
 function scan {
+   # In case we're reading from stdin. Can capture the output, and re-use both
+   # in the `mapfile` and the `while read`.
+   local input_data=$( cat "$INPUT_FILE" )
+
+   # Creating secondary line buffer to do better debug output printing. It would
+   # be more efficient to *only* hold a buffer of lines up until each newline.
+   # Unpon an error, we'd only need to save the singular line, then can resume
+   mapfile -td $'\n' FILE_LINES <<< "$input_data"
+
    # For easier lookahead, read all characters first into an array. Allows us
    # to seek/index very easily.
    while read -rN1 character ; do
       CHARRAY+=( "$character" )
-   done < "$INPUT_FILE"
+   done <<< "$input_data"
 
    while [[ ${CURSOR[offset]} -lt ${#CHARRAY[@]} ]] ; do
-      advance
-      [[ -z "$CURSOR" ]] && break
+      advance ; [[ -z "$CURRENT" ]] && break
 
       # Save current cursor information.
-      FREEZE[offset]=CURSOR[offset]
-      FREEZE[lineno]=CURSOR[lineno]
-      FREEZE[colno]=CURSOR[colno]
+      FREEZE[offset]=${CURSOR[offset]}
+      FREEZE[lineno]=${CURSOR[lineno]}
+      FREEZE[colno]=${CURSOR[colno]}
 
       # Skip comments.
-      if [[ "$CURRENT" == '#' ]] ; then
+      if [[ $CURRENT == '#' ]] ; then
          comment ; continue
       fi
 
       # Skip whitespace.
-      if [[ "$CURRENT" =~ [[:space:]] ]] ; then
+      if [[ $CURRENT =~ [[:space:]] ]] ; then
          continue
       fi
 
       # Symbols.
-      case "$CURRENT" in
+      case $CURRENT in
          ':')  Token      'COLON' "$CURRENT"  && continue ;;
          '(')  Token    'L_PAREN' "$CURRENT"  && continue ;;
          ')')  Token    'R_PAREN' "$CURRENT"  && continue ;;
@@ -125,13 +134,65 @@ function scan {
          ']')  Token    'R_BRACE' "$CURRENT"  && continue ;;
          '{')  Token  'L_BRACKET' "$CURRENT"  && continue ;;
          '}')  Token  'R_BRACKET' "$CURRENT"  && continue ;;
-         '<')  Token       'LESS' "$CURRENT"  && continue ;;
-         '>')  Token    'GREATER' "$CURRENT"  && continue ;;
       esac
+
+      if [[ $CURRENT == '<' ]] ; then
+         if [[ $PEEK == '=' ]] ; then
+            advance ; Token 'LE_EQ' '<='
+            continue
+         else
+            Token 'LT' '<'
+            continue
+         fi
+      fi
+
+      if [[ $CURRENT == '>' ]] ; then
+         if [[ $PEEK == '=' ]] ; then
+            advance ; Token 'GT_EQ' '>='
+            continue
+         else
+            Token 'GT' '>'
+            continue
+         fi
+      fi
+
+      # Identifiers.
+      if [[ $CURRENT =~ [[:alpha:]_] ]] ; then
+         identifier ; continue
+      fi
+
+      # Strings.
+      if [[ $CURRENT =~ [\'\"] ]] ; then
+         string $CURRENT ; continue
+      fi
+
+      # Paths.
+      # If someone has named directories like a hapless fucking child, we must
+      # account for paths with spaces in them. Can either:
+      #  1. Require spaces are escaped with backslashes
+      #  2. Allow strings, and coerce to a path depending on type
+      #
+      # Could resolve the `~/' and `./' paths at this stage. We have the path to
+      # the source file. Can just send a $(dirname $INPUT_FILE) for relative
+      # paths, and expand `~' to $HOME. Though that should probably be handled
+      # by the compiler when actually creating the path Type.
+      if [[ $CURRENT == '/' ]] ; then
+         advance
+         path '/'
+         continue
+      elif [[ $CURRENT == '~' && $PEEK == '/' ]] ; then
+         advance ; advance
+         path '~/'
+         continue
+      elif [[ $CURRENT == '.' && $PEEK == '/' ]] ; then
+         advance ; advance
+         path './'
+         continue
+      fi
 
       # Can do a dedicated error pass, scanning for error tokens, and assembling
       # the context to print useful debug messages.
-      Token 'ERROR' "$CURRENT"
+      Token 'ERROR' $CURRENT
    done
 
    Token 'EOF'
@@ -139,9 +200,79 @@ function scan {
 
 
 function comment {
-   echo -n #pass
+   # There are no multiline comments. Seeks from '#' to the end of the line.
+   while [[ -n $CURRENT ]] ; do
+      [[ "$PEEK" =~ $'\n' ]] && break
+      advance
+   done
 }
 
+
+function identifier {
+   local buffer="$CURRENT"
+
+   while [[ -n $CURRENT ]] ; do
+      [[ $PEEK =~ [^[:alnum:]_] ]] && break
+      advance ; buffer+="$CURRENT"
+   done
+
+   Token 'IDENTIFIER' "$buffer"
+}
+
+
+function string {
+   # Supports both '/" characters to indicate strings, and intermediate '/"
+   # characters can be escaped with a backslash.
+   delim="$1"
+   declare -a buffer=()
+
+   while [[ -n $CURRENT ]] ; do
+      if [[ $PEEK == $delim ]] ; then
+         if [[ $CURRENT == '\' ]] ; then
+            unset buffer[-1]
+         else
+            break
+         fi
+      fi
+      advance ; buffer+=( "$CURRENT" )
+   done
+
+   local join=''
+   for c in "${buffer[@]}" ; do
+      join+="$c"
+   done
+
+   # Create token.
+   Token 'STRING' "$join"
+
+   # Skip final closing ('|").
+   advance
+}
+
+function path {
+   local prefix="$1"
+   local -a buffer=( $prefix )
+
+   while [[ -n $CURRENT ]] ; do
+      if [[ $CURRENT =~ [[:space:]] ]] ; then
+         if [[ ${buffer[-1]} == '\' ]] ; then
+            unset buffer[-1]
+         else
+            break
+         fi
+      fi
+      buffer+=( "$CURRENT" )
+      advance
+   done
+
+   local join=''
+   for c in "${buffer[@]}" ; do
+      join+="$c"
+   done
+
+   # Create token.
+   Token 'PATH' "$join"
+}
 
 
 scan
