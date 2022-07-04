@@ -21,3 +21,5 @@ declare -A COMPILE_ERROR=(
 source <(
    bash "${PROGDIR}"/lexer.sh "${1?Requires file input}"
 )
+
+source "${PROGDIR}"/parser.sh

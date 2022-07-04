@@ -246,10 +246,6 @@ function path {
    local -a buffer=( $prefix )
 
    while [[ -n $CURRENT ]] ; do
-      if [[ $CURRENT =~ [,;] ]] && [[ $PEEK == [[:space:]] ]] ; then
-
-      fi
-
       if [[ $CURRENT =~ [[:space:]] ]] ; then
          if [[ ${buffer[-1]} == '\' ]] ; then
             unset buffer[-1]
@@ -278,5 +274,5 @@ scan
 # import that which we need.
 (
    declare -p INPUT_FILE  FILE_LINES
-   declare -p ${!TOKEN_*}
+   declare -p TOKENS  ${!TOKEN_*}
 ) | sort -V -k3
