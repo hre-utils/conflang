@@ -2,4 +2,22 @@
 # changelog
 #  2022-07-03 :: Created
 
-PROGDIR=$( cd "$( cd "${BASH_SOURCE[0]}" )" ; pwd )
+PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
+source "${PROGDIR}/errors.sh"
+
+declare -a ERRORS=()
+declare -A COMPILE_ERROR=(
+   # All errors are defined in the ./errors.sh file. Easier to define them in a
+   # single place, both for lookup, and ensuring the same exit status isn't used
+   # twice.
+   [SYNTAX_ERROR]=${COMPILE_ERROR__SYNTAX_ERROR}
+)
+
+# Imports:
+#  TOKENS[]             # Array of token names
+#  TOKEN_$n             # Sequence of all token objects
+#  INPUT_FILE           # Name of input file
+#  FILE_LINES[]         # INPUT_FILE.readlines()
+source <(
+   bash "${PROGDIR}"/lexer.sh "${1?Requires file input}"
+)
