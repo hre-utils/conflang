@@ -6,6 +6,12 @@
 #  INPUT_FILE           # Name of input file
 #  FILE_LINES[]         # INPUT_FILE.readlines()
 # }
+#
+#---
+# TODO:
+#  [ ] OOPS I forgot booleans
+#      - Just going to use true/false, not yaml's yes/no/1/0 nonsense
+
 
 # Need to think through the structure of the file a little more. Both to write a
 # grammer, but also to make something that can be used to parse the programmer's
@@ -14,7 +20,7 @@
 # sourced second, and only settings in direct conflict supersede prior ones.
 #
 # List items are separated by any whitespace.
-:<<COMMENT
+:<<'COMMENT'
    SECTION_NAME {
       # Key/value pairs.
       key (type:subtype) default_value {
@@ -34,6 +40,34 @@
          assert_3;
       }
    }
+
+
+   Grammar        Thinkies. What *is* each piece of the structure.
+      program     section, EOF
+      section     zero or more $element
+      array       zero or more literals
+      element     $data or $section
+      data        $array, or $literal
+      section     named collection of zero or more $data
+      item        identifier (opt. $type/subtype), colon, $data
+      literal     string, int, path, or bool
+
+
+   EBNF (kinda)
+      program    -> section EOF
+      section    -> 
+
+
+
+      array       -> type '[' data* ']' asserts
+      asserts     -> '{' expression* '}'
+      expression  -> expr ';'
+               
+
+      what can an array contain?
+
+
+
 COMMENT
 
 
@@ -64,13 +98,12 @@ function mk_section {
    declare -g  NODE=$nname
 
    local -n node=$nname
-   #node=()
    # An array declared with only `declare -a NODE`, but no value, will not be
    # printed by `declare -p ${!NODE*}`. Requires to be set to at least an empty
    # array.
+   node=()
 
-   # To differentiate from dict associateive arrays.
-   node[%type]='type'
+   TYPEOF[$nname]='section'
 }
 
 
@@ -90,10 +123,12 @@ function mk_key {
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
    declare -g NODE=$nname
+
+   TYPEOF[$nname]='section'
 }
 
 
-function mk_type {
+function mk_type_decl {
    # Example, representing a list[string]:
    #> Type(
    #>    kind: 'list',
@@ -111,6 +146,8 @@ function mk_type {
    local -n node=$nname
    node[kind]=          # Primitive type
    node[subtype]=       # Sub `Type' node
+
+   TYPEOF[$nname]='type'
 }
 
 
@@ -119,6 +156,8 @@ function mk_integer {
    local nname="NODE_${_NODE_NUM}"
    declare -gi $nname
    declare -g  NODE=$nname
+
+   TYPEOF[$nname]='integer'
 }
 
 
@@ -127,6 +166,18 @@ function mk_string {
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
    declare -g NODE=$nname
+
+   TYPEOF[$nname]='string'
+}
+
+
+function mk_identifier {
+   (( _NODE_NUM++ ))
+   local nname="NODE_${_NODE_NUM}"
+   declare -g $nname
+   declare -g NODE=$nname
+
+   TYPEOF[$nname]='identifier'
 }
 
 
@@ -135,6 +186,15 @@ declare -i IDX
 declare -- CURRENT PEEK
 
 function advance { 
+   # TODO: So I don't need to potentially declare namerefs in every single
+   # function for the ${CURRENT,PEEK} tokens, might as well just make global
+   # pointers like so:
+   #> declare -g  CURRENT_NAME=${TOKENS[IDX+1]}
+   #> declare -gn CURRENT=$CURRENT_NAME
+   # Thus, we can always access either the name of the current/peek tokens, or
+   # the underlying token itself. Thought about making it ONLY the poionter,
+   # except we do actually need the names in the `mk_` functions.
+
    while [[ $IDX -lt ${#TOKENS[@]} ]] ; do
       CURRENT=${TOKENS[IDX]}
       PEEK=${TOKENS[IDX+1]}
@@ -161,9 +221,24 @@ function syntax_error {
 }
 
 
-function check { echo -n '' ;}
-function match { echo -n '' ;}
-function munch { echo -n '' ;}
+function check {
+   local -n t=$CURRENT
+   [[ "${t[type]}" == $1 ]]
+}
+
+
+function match {
+   local -n t=$CURRENT
+   [[ "${t[type]}" == $1 ]] || raise_parse_error
+}
+
+
+function munch {
+   local -n t=$CURRENT
+   [[ "${t[type]}" == $1 ]] || raise_parse_error
+   advance
+}
+
 
 function parse {
    advance
@@ -172,13 +247,65 @@ function parse {
 
 #═════════════════════════════╡ GRAMMAR FUNCTIONS ╞═════════════════════════════
 function program {
-   mk_section # create `%inline' section
+   mk_section # create top-level, anonymous, `inline' section.
+
+   while [[ -n $PEEK ]] ; do
+      key_or_section
+   done
 }
 # `program' should start with one top level section initially defined: %inline.
 # Users cannot define headings with symbols, so there's no possibility of
 # collision.
 
-function section { echo -n '' ;}
-function key { echo -n '' ;}
-function type { echo -n '' ;}
-function list { echo -n '' ;}
+function key_or_section {
+   match 'IDENTIFIER'
+   mk_identifier
+
+   local -n key=$NODE
+   local -n curr=$CURRENT
+
+   # Save the value of the current identifier token to the Identifier Node.
+   # Token(value: "...") -> Identifier("...")
+   node="${curr[value]}"
+
+   # Move past identifier.
+   advance
+
+   local -n curr=$CURRENT
+   if check 'L_PAREN' ; then
+      mk_type_decl
+   fi
+   local type=$NODE
+   
+   case "${curr[type]}" in
+   esac
+}
+
+
+function section {
+}
+
+
+function key {
+
+}
+
+
+function type_decl {
+}
+
+
+function list {
+   # Set aside current global $NODE pointer.
+   local store=$NODE
+
+   # Restore.
+   declare -g NODE=$store
+}
+
+#════════════════════════════════════╡ GO ╞═════════════════════════════════════
+parse
+(
+   declare -p TYPEOF
+   [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
+)
