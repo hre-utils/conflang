@@ -18,8 +18,7 @@ There are types.
 .Primitive types
 . Integer
 . String
-. Associative array
-. Indexed array
+. Array
 . Path
 
 Tiny `stdlib` providing basic *query* methods.

@@ -25,6 +25,15 @@ declare -A FREEZE CURSOR=(
 )
 
 
+declare -A KEYWORD=(
+   [true]='TRUE'
+   [false]='FALSE'
+   [and]='AND'
+   [or]='OR'
+   [not]='NOT'
+)
+
+
 function Token {
    local type=$1  value=$2
    
@@ -207,7 +216,12 @@ function identifier {
       advance ; buffer+="$CURRENT"
    done
 
-   Token 'IDENTIFIER' "$buffer"
+   kw="${KEYWORD[$buffer]}" 
+   if [[ -n $kw ]] ; then
+      Token "$buffer" "$buffer"
+   else
+      Token 'IDENTIFIER' "$buffer"
+   fi
 }
 
 

@@ -23,14 +23,14 @@
 :<<'COMMENT'
    SECTION_NAME {
       # Key/value pairs.
-      key (type:subtype) default_value {
+      key type:subtype default_value {
          assert_1;
          assert_2;
          assert_3;
       }
 
       # Lists.
-      key (type:subtype) [
+      key type:subtype [
          item_1
          item_2
          item_3
@@ -39,34 +39,65 @@
          assert_2;
          assert_3;
       }
+
+      # Boils down to.
+      identifier  identifier[:identifier]*  [data]  ['{' expr_list '}']  ';'
    }
 
+   EBNF-ish
+      # Not entirely accurate, as we implicitly create an %inline section as
+      # the root.
+      program     -> section EOF
 
-   Grammar        Thinkies. What *is* each piece of the structure.
-      program     section, EOF
-      section     zero or more $element
-      array       zero or more literals
-      element     $data or $section
-      data        $array, or $literal
-      section     named collection of zero or more $data
-      item        identifier (opt. $type/subtype), colon, $data
-      literal     string, int, path, or bool
+      # Within a section can only be named-elements. Can't have a section with a
+      # raw array, for example, as there's no way to reference it.
+      section     -> identifier '{' named* '}'
 
+      # Can easily identify if we're opening a section block, or an
+      # array/literal, as the former is differentiated by an opening '{'.
+      named       -> section
+                   | identifier [type] [data] [validation] ';'
 
-   EBNF (kinda)
-      program    -> section EOF
-      section    -> 
-
-
+      # Data has to be separate from section & named, to differentiate what can
+      # be typed, and which element requires an identifier.
+      data        -> array
+                   | literal
 
       array       -> type '[' data* ']' asserts
-      asserts     -> '{' expression* '}'
-      expression  -> expr ';'
-               
 
-      what can an array contain?
+      # The final expression does not require 
+      asserts     -> '{' expr_list '}'
+
+      expr_list   -> expr_list ';'
+                   | expression
+
+      type        -> identifier [':' identifier]*
+
+      validation  -> '{' expr* '}'
+
+      expr_list   -> expr ';'
+
+      literal     -> string
+                   | integer
+                   | path
+                   | boolean
 
 
+   # Default top-level section created by the parser.
+   %inline {
+      # Only "named" elements can go here.
+      key "data";
+
+      key [
+         "data"
+         "data2"
+      ];
+      # Arrays are separated by whitespace, and terminated by a closing ']'.
+      # Arrays and named literals must be terminated with a ';'.
+
+      section { }
+      # Sections do not need to end in an 
+   }
 
 COMMENT
 
@@ -248,10 +279,18 @@ function parse {
 #═════════════════════════════╡ GRAMMAR FUNCTIONS ╞═════════════════════════════
 function program {
    mk_section # create top-level, anonymous, `inline' section.
+   sect_name='%inline'
+
+   # Store newly created section node before we overwrite.
+   local store=$NODE
 
    while [[ -n $PEEK ]] ; do
       key_or_section
    done
+
+   # Restore.
+   declare -g NODE=$store
+   munch 'EOF'
 }
 # `program' should start with one top level section initially defined: %inline.
 # Users cannot define headings with symbols, so there's no possibility of
