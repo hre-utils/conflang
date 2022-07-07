@@ -14,6 +14,7 @@
 #  [ ] Tracebacks!
 #      - What a good opportunity for me to work on that bash traceback nonsense
 #        I was trying to figure out a while ago.
+#  [ ] I hate how `munch()` works right now
 
 
 # Need to think through the structure of the file a little more. Both to write a
@@ -494,7 +495,7 @@ function typedef {
 
    type_[kind]=$name
 
-   while check 'COLON' ; do
+   while match 'COLON' ; do
       typedef
       type_[subtype]=$NODE
    done

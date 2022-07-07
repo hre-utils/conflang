@@ -1,5 +1,1 @@
-things [
-   "one"
-   "two"
-   "three"
-];
+something type:subtype "string";
