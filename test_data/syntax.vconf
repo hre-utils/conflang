@@ -1,7 +1,5 @@
-global {
-   key "value";
-}
-
-something_else {
-   key2 "value2";
-}
+things [
+   "one"
+   "two"
+   "three"
+];

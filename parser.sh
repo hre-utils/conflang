@@ -181,6 +181,16 @@ function mk_element {
 }
 
 
+function mk_array {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -ga $nname
+   declare -g  NODE=$nname
+
+   local -n node=$nname
+   node=()
+}
+
 
 function mk_typedef {
    ## psdudo.
@@ -512,7 +522,19 @@ function data {
 
 
 function array {
-   echo -n
+   munch 'L_BRACKET'
+
+   mk_array
+   local -- save=$NODE
+   local -n node=$NODE
+
+   while ! check 'R_BRACKET' ; do
+      data
+      node+=( $NODE )
+   done
+
+   declare -g NODE=$save
+   munch 'R_BRACKET' "Array blocks must end with \`]'."
 }
 
 
