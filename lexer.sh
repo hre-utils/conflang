@@ -35,7 +35,7 @@ declare -A KEYWORD=(
 
 
 function Token {
-   local type="$1"  value="$2"
+   local type=$1  value=$2
    
    # Realistically we can just do "TOKEN_$(( ${#_TOKEN_NUM[@]} + 1 ))". Feel like
    # that add visual complexity here, despite removing slight complexity of yet
@@ -51,9 +51,9 @@ function Token {
    t[value]="$value"
 
    # Cursor information (position in file & line).
-   t[offset]="${FREEZE[offset]}"
-   t[lineno]="${FREEZE[lineno]}"
-   t[colno]="${FREEZE[colno]}"
+   t[offset]=${FREEZE[offset]}
+   t[lineno]=${FREEZE[lineno]}
+   t[colno]=${FREEZE[colno]}
 
    TOKENS+=( "$tname" ) ; (( _TOKEN_NUM++ ))
    #echo "[${t[lineno]}:${t[colno]}] ${type} [${value}]"
@@ -79,8 +79,8 @@ function advance {
    (( ++CURSOR[colno]  ))
 
    # This is a real dumb use of bash's confusing array indexing.
-   CURRENT="${CHARRAY[CURSOR[offset]]}"
-   PEEK="${CHARRAY[CURSOR[offset]+1]}"
+   CURRENT=${CHARRAY[CURSOR[offset]]}
+   PEEK=${CHARRAY[CURSOR[offset]+1]}
 
    if [[ $CURRENT == $'\n' ]] ; then
       ((CURSOR[lineno]++))
@@ -92,7 +92,7 @@ function advance {
 function scan {
    # In case we're reading from stdin. Can capture the output, and re-use both
    # in the `mapfile` and the `while read`.
-   local input_data="$( cat "$INPUT_FILE" )"
+   local input_data=$( cat "$INPUT_FILE" )
 
    # Creating secondary line buffer to do better debug output printing. It would
    # be more efficient to *only* hold a buffer of lines up until each newline.
@@ -109,9 +109,9 @@ function scan {
       advance ; [[ -z "$CURRENT" ]] && break
 
       # Save current cursor information.
-      FREEZE[offset]="${CURSOR[offset]}"
-      FREEZE[lineno]="${CURSOR[lineno]}"
-      FREEZE[colno]="${CURSOR[colno]}"
+      FREEZE[offset]=${CURSOR[offset]}
+      FREEZE[lineno]=${CURSOR[lineno]}
+      FREEZE[colno]=${CURSOR[colno]}
 
       # Skip comments.
       if [[ $CURRENT == '#' ]] ; then
