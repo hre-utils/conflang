@@ -11,6 +11,9 @@
 # TODO:
 #  [ ] OOPS I forgot booleans
 #      - Just going to use true/false, not yaml's yes/no/1/0 nonsense
+#  [ ] Tracebacks!
+#      - What a good opportunity for me to work on that bash traceback nonsense
+#        I was trying to figure out a while ago.
 
 
 # Need to think through the structure of the file a little more. Both to write a
@@ -56,7 +59,9 @@
       # Can easily identify if we're opening a section block, or an
       # array/literal, as the former is differentiated by an opening '{'.
       named       -> section
-                   | identifier [type] [data] [validation] ';'
+                   | element
+
+      element    -> identifier [type] [data] [validation] ';'
 
       # Data has to be separate from section & named, to differentiate what can
       # be typed, and which element requires an identifier.
@@ -123,43 +128,66 @@ declare -A TYPEOF=()
 
 
 function mk_section {
+   ## psdudo.
+   #> class Section:
+   #>    name  : identifier = None
+   #>    items : array      = []
+
+   # 1) create parent
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
+   local   --  nname="NODE_${_NODE_NUM}"
    declare -gA $nname
    declare -g  NODE=$nname
+   local   -n  node=$nname
 
-   local -n node=$nname
-   # An array declared with only `declare -a NODE`, but no value, will not be
-   # printed by `declare -p ${!NODE*}`. Requires to be set to at least an empty
-   # array.
-   node=()
+   # 2) create list to hold the items within the section.
+   (( _NODE_NUM++ ))
+   local nname_items="NODE_${_NODE_NUM}"
+   declare -ga $nname_items
+   local   -n  node_items=$nname_items
+   node_items=()
 
+   # 3) assign child node to parent.
+   node[name]=
+   node[items]=$nname_items
+
+   # 4) Meta information, for easier parsing.
    TYPEOF[$nname]='section'
 }
 
 
-function mk_list {
+function mk_element {
+   ## psdudo.
+   #> class Named:
+   #>    name       : identifier = None
+   #>    type       : Type       = None     (opt)
+   #>    data       : Data       = None     (opt)
+   #>    validation : Validation = None     (opt)
+   #
+   # $Data may be either an $Array or literal.
+
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -ga $nname
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
    declare -g  NODE=$nname
+   local   -n  node=$nname
 
-   local -n node=$nname
-   node=()
+   node[name]=       # identifier
+   node[type]=       # type
+   node[data]=       # section, array, int, str, bool, path
+   node[validation]=
+   
+   TYPEOF[$nname]='element'
 }
 
 
-function mk_key {
-   (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
 
-   TYPEOF[$nname]='section'
-}
-
-
-function mk_type_decl {
+function mk_typedef {
+   ## psdudo.
+   #> class Typedef:
+   #>    kind     : identifier = None
+   #>    subtype  : Typedef    = None     (opt)
+   #
    # Example, representing a list[string]:
    #> Type(
    #>    kind: 'list',
@@ -182,7 +210,25 @@ function mk_type_decl {
 }
 
 
+function mk_boolean {
+   ## pseudo.
+   #> class Integer(Literal, bool):
+   #>    pass
+
+   (( _NODE_NUM++ ))
+   local nname="NODE_${_NODE_NUM}"
+   declare -g $nname
+   declare -g NODE=$nname
+
+   TYPEOF[$nname]='identifier'
+}
+
+
 function mk_integer {
+   ## pseudo.
+   #> class Integer(Literal, int):
+   #>    pass
+
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -gi $nname
@@ -193,6 +239,10 @@ function mk_integer {
 
 
 function mk_string {
+   ## pseudo.
+   #> class Integer(Literal, str):
+   #>    pass
+
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
@@ -202,7 +252,25 @@ function mk_string {
 }
 
 
+function mk_path {
+   ## pseudo.
+   #> class Integer(Literal, str):
+   #>    pass
+
+   (( _NODE_NUM++ ))
+   local nname="NODE_${_NODE_NUM}"
+   declare -g $nname
+   declare -g NODE=$nname
+
+   TYPEOF[$nname]='identifier'
+}
+
+
 function mk_identifier {
+   ## pseudo.
+   #> class Integer(Literal, str):
+   #>    pass
+
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
@@ -213,30 +281,36 @@ function mk_identifier {
 
 
 #═══════════════════════════════════╡ utils ╞═══════════════════════════════════
-declare -i IDX
-declare -- CURRENT PEEK
+declare -i IDX=0
+declare -- CURRENT  CURRENT_NAME
+declare -- PEEK     PEEK_NAME
+# Calls to `advance' both globally set the name of the current/next node(s),
+# e.g., `TOKEN_1', as well as declaring a nameref to the variable itself.
+#
+# TODO:
+# I could probably save myself pretty significant headache by also adding a
+# PREVIOUS{,_NAME} var(s), such that I can just munch an identifier, and still
+# access the data from it.
+
 
 function advance { 
-   # TODO: So I don't need to potentially declare namerefs in every single
-   # function for the ${CURRENT,PEEK} tokens, might as well just make global
-   # pointers like so:
-   #> declare -g  CURRENT_NAME=${TOKENS[IDX+1]}
-   #> declare -gn CURRENT=$CURRENT_NAME
-   # Thus, we can always access either the name of the current/peek tokens, or
-   # the underlying token itself. Thought about making it ONLY the poionter,
-   # except we do actually need the names in the `mk_` functions.
-
    while [[ $IDX -lt ${#TOKENS[@]} ]] ; do
-      CURRENT=${TOKENS[IDX]}
-      PEEK=${TOKENS[IDX+1]}
+      declare -g  CURRENT_NAME=${TOKENS[IDX]}
+      declare -gn CURRENT=$CURRENT_NAME
 
-      local -n t=$CURRENT
-      if [[ ${t[type]} == 'ERROR' ]] ; then
-         syntax_error $CURRENT
+      declare -g  PEEK_NAME=${TOKENS[IDX+1]}
+      if [[ -n $PEEK_NAME ]] ; then
+         declare -gn PEEK=$PEEK_NAME
       fi
 
-      (( ++IDX ))
+      if [[ ${CURRENT[type]} == 'ERROR' ]] ; then
+         raise_syntax_error
+      else
+         break
+      fi
    done
+
+   (( ++IDX ))
 }
 
 
@@ -244,29 +318,57 @@ function advance {
 # Error recovery. We have pretty solid places from which we can "recover" to if
 # an `ERROR' token is encountered. The end of any list or block is a pretty easy
 # candidate.
-function syntax_error {
-   local -n t=$1
-   printf "[${t[lineno]}:${t[colno]}]There was an error.\n" 1<&2
+function raise_syntax_error {
+   local -- tname=${1:-$CURRENT_NAME}
+   local -n t=$tname
+
+   printf "[${t[lineno]}:${t[colno]}] There was an error.\n" 1<&2
    # TODO: use the proper, defined error code for syntax errors.
    exit -1
 }
 
 
+function raise_parse_error {
+   local -n t=$CURRENT_NAME
+   local -- exp=$1
+   local -- msg="${2:-Expected something else.}"
+
+   printf "[${t[lineno]}:${t[colno]}] expected($exp) ${msg}\n" 1<&2
+   declare -p $CURRENT_NAME
+   exit -1
+}
+
+
 function check {
-   local -n t=$CURRENT
-   [[ "${t[type]}" == $1 ]]
+   [[ "${CURRENT[type]}" == $1 ]]
 }
 
 
 function match {
-   local -n t=$CURRENT
-   [[ "${t[type]}" == $1 ]] || raise_parse_error
+   if check $1 ; then
+      advance
+      return 0
+   fi
+   
+   return 1
+}
+
+
+function peek {
+   if [[ "${PEEK[type]}" == $1 ]] ; then
+      advance
+      return 0
+   fi
+   
+   return 1
 }
 
 
 function munch {
-   local -n t=$CURRENT
-   [[ "${t[type]}" == $1 ]] || raise_parse_error
+   if ! check $1 ; then
+      raise_parse_error "$1" "$2"
+   fi
+   
    advance
 }
 
@@ -278,73 +380,186 @@ function parse {
 
 #═════════════════════════════╡ GRAMMAR FUNCTIONS ╞═════════════════════════════
 function program {
-   mk_section # create top-level, anonymous, `inline' section.
-   sect_name='%inline'
+   # TODO:
+   # This is preeeeeeeeeeeeetty janky. I don't love it. Since this pseudo-
+   # section doesn't actually exist in-code, it doesn't have any opening or
+   # closing braces. So `section()` gets fucked up when trying to munch a
+   # closing brace. Gotta just in-line stuff here all hacky-like.
+   #
+   # Creates a default top-level `section', allowing top-level key:value pairs,
+   # wout requiring a dict (take that, JSON).
+   mk_section
+   local -n node=$NODE
+   local -n items=${node[items]}
 
-   # Store newly created section node before we overwrite.
-   local store=$NODE
+   declare -g NODE_0='%inline'
+   node[name]=$NODE_0
 
-   while [[ -n $PEEK ]] ; do
-      key_or_section
+   while ! check 'EOF' ; do
+      named
+      items+=( $NODE )
    done
 
-   # Restore.
-   declare -g NODE=$store
    munch 'EOF'
 }
-# `program' should start with one top level section initially defined: %inline.
-# Users cannot define headings with symbols, so there's no possibility of
-# collision.
 
-function key_or_section {
-   match 'IDENTIFIER'
-   mk_identifier
 
-   local -n key=$NODE
-   local -n curr=$CURRENT
+function named {
+   identifier "Sections may only contain sub-sections & elements."
 
-   # Save the value of the current identifier token to the Identifier Node.
-   # Token(value: "...") -> Identifier("...")
-   node="${curr[value]}"
-
-   # Move past identifier.
-   advance
-
-   local -n curr=$CURRENT
-   if check 'L_PAREN' ; then
-      mk_type_decl
+   # Section:
+   # If looks like:  `identifier { ... }`,  then it's a section
+   if match 'L_BRACE' ; then
+      section
+   else
+      element
    fi
-   local type=$NODE
-   
-   case "${curr[type]}" in
-   esac
 }
 
 
 function section {
+   # Elements must be preceded by an identifier.
+   local -- name=$NODE
+
+   mk_section
+   local -- save=$NODE
+   local -n node=$NODE
+   local -n items=${node[items]}
+
+   node[name]=$name
+
+   while ! check 'R_BRACE' ; do
+      named
+      items+=( $NODE )
+   done
+
+   munch 'R_BRACE'
+   declare -g NODE=$save
 }
 
 
-function key {
+function element {
+   # Elements must be preceded by an identifier.
+   local -- name=$NODE
 
+   mk_element
+   local -- save=$NODE
+   local -n node=$NODE
+
+   node[name]=$name
+
+   if check 'IDENTIFIER' ; then
+      typedef
+      node[type]=$NODE
+   fi
+
+   # TODO: This isn't actually a great check, as we want to make sure the user
+   # DOES close an empty identifier definition with a semicolon, which we're
+   # not accounting for here.
+   if ! check ';' ; then
+      data
+      node[data]=$NODE
+   fi
+
+   if check '{' ; then
+      validation
+      node[validation]=$NODE
+   else
+      munch 'SEMI' "Data blocks must close with \`;'."
+   fi
+
+   declare -g NODE=$save
 }
 
 
-function type_decl {
+function typedef {
+   # Store current `identifier' token. Reaching this method is contingent upon
+   # the current token *being* an identifier, so we're safe.
+   identifier
+   local -- name=$NODE
+
+   mk_typedef
+   local -- save=$NODE
+   local -n type_=$save
+
+   type_[kind]=$name
+
+   while check 'COLON' ; do
+      typedef
+      type_[subtype]=$NODE
+   done
+
+   declare -g NODE=$save
 }
 
 
-function list {
-   # Set aside current global $NODE pointer.
-   local store=$NODE
+function validation {
+   munch '{' "Validation blocks open with \`{'. Or perhaps you forgot a \`;'?"
 
-   # Restore.
-   declare -g NODE=$store
+   munch '}' "Validation blocks must end with \`}'."
 }
+
+
+function data {
+   case "${CURRENT[type]}" in
+      'L_BRACKET')  array    ;;
+      'BOOLEAN')    boolean  ;;
+      'INTEGER')    integer  ;;
+      'STRING')     string   ;;
+      'PATH')       path     ;;
+   esac
+}
+
+
+function array {
+   echo -n
+}
+
+
+function identifier {
+   mk_identifier
+   local -n node=$NODE
+   node=${CURRENT[value]}
+   munch 'IDENTIFIER' "$1"
+}
+
+
+function boolean {
+   mk_boolean
+   local -n node=$NODE
+   node=${CURRENT[value]}
+   munch 'BOOLEAN' "$1"
+}
+
+
+function integer {
+   mk_integer
+   local -n node=$NODE
+   node=${CURRENT[value]}
+   munch 'INTEGER' "$1"
+}
+
+
+function string {
+   mk_string
+   local -n node=$NODE
+   node=${CURRENT[value]}
+   munch 'STRING' "$1"
+}
+
+
+function path {
+   mk_path
+   local -n node=$NODE
+   node=${CURRENT[value]}
+   munch 'PATH' "$1"
+}
+
 
 #════════════════════════════════════╡ GO ╞═════════════════════════════════════
 parse
+
 (
    declare -p TYPEOF
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
-)
+) | sort -V -k3

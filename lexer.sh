@@ -21,7 +21,7 @@ declare -i _TOKEN_NUM=0
 declare -A FREEZE CURSOR=(
    [offset]=-1    # Starts at -1, as the first call to advance increments to 0.
    [lineno]=1
-   [colno]=1
+   [colno]=0
 )
 
 
@@ -130,10 +130,10 @@ function scan {
          ':')  Token      'COLON' "$CURRENT"  && continue ;;
          '(')  Token    'L_PAREN' "$CURRENT"  && continue ;;
          ')')  Token    'R_PAREN' "$CURRENT"  && continue ;;
-         '[')  Token    'L_BRACE' "$CURRENT"  && continue ;;
-         ']')  Token    'R_BRACE' "$CURRENT"  && continue ;;
-         '{')  Token  'L_BRACKET' "$CURRENT"  && continue ;;
-         '}')  Token  'R_BRACKET' "$CURRENT"  && continue ;;
+         '{')  Token    'L_BRACE' "$CURRENT"  && continue ;;
+         '}')  Token    'R_BRACE' "$CURRENT"  && continue ;;
+         '[')  Token  'L_BRACKET' "$CURRENT"  && continue ;;
+         ']')  Token  'R_BRACKET' "$CURRENT"  && continue ;;
       esac
 
       if [[ $CURRENT == '<' ]] ; then

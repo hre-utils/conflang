@@ -1,11 +1,7 @@
-# This is a comment
-'A \'string\''
-./this\ is\ a\ path
-./this/is/a/path
-~/this/is/a\ path
-/
-/this
-( )
+global {
+   key "value";
+}
 
-that
-here
+something_else {
+   key2 "value2";
+}
