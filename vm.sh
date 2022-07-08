@@ -51,6 +51,17 @@
 # can we typecheck functions prior to runtime? *DO* we perform any static
 # analysis on the validation expressions?
 
+# More THINKIES:
+# How many values do we actually need to hold in the stack...? Because honestly
+# I think it's only 1. We can just have a single variable that holds the current
+# value. It's not a stack-based VM, as we don't need to push anything onto the
+# stack really. There are no stack-frames to contend with, as there are no
+# function calls we need to evaluate here. No codes operate on anything more
+# than the singular value remaining upon the stack.
+# Need to think this through more, and play around with it a little. Would
+# reduce complexity, and likely increase speed. Fractionally. The majority
+# is likely eaten up by tests inside the while loop.
+
 : '
    TYPE           CODE        ARG1        ARG2        META
    ----------------------------------------------------------------
@@ -84,7 +95,7 @@ declare -A OP_3=(  [code]='STORE'   [value]='VAL_0'   )    # store stuff
 declare -A OP_4=(  [code]='LT'      [rhs]='VAL_1'     )    # compare stuff
 
 declare -A VAL_0=( [type]='INTEGER' [value]=4         )
-declare -A VAL_0=( [type]='INTEGER' [value]=5         )
+declare -A VAL_1=( [type]='INTEGER' [value]=5         )
 
 declare -a OP_CODES=(
    OP_1
@@ -117,26 +128,27 @@ while [[ $IP -lt $NUM_OPS ]] ; do
    declare -n op=${OP_CODES[IP]}
 
    case "${op[code]}" in
-      'POP')      unset STACK[-1]
+      'POP')      STACK=( "${STACK[@]:0:${#STACK[@]}-1}" )
                   ;;
 
-      'STORE')    make_value
-                  declare -n v=$VAL
-                  declare -n op_value="${op[value]}"
-                  v[type]="${op_value[type]}"
-                  v[value]="${op_value[value]}"
-                  stack+=( "$VAL" )
+      # I believe this will be faster than a 'POP', however it unsets the VAL_n
+      # itself, in addition to popping it from the array.
+      'DEL')      unset STACK[-1]
+                  ;;
+
+      'STORE')    STACK+=( "${op[value]}" )
                   ;;
 
       'IS_DIR')   make_value
                   declare -n v=$VAL
                   v[type]='BOOLEAN'
+                  v[value]='FALSE'
 
                   if [[ -d "${op[dir]}" ]] ; then
                      v[value]='TRUE'
-                  else
-                     v[value]='TRUE'
                   fi
+
+                  STACK+=( $VAL )
                   ;;
 
       'TRUE' | 'FALSE')
@@ -144,7 +156,7 @@ while [[ $IP -lt $NUM_OPS ]] ; do
                   declare -n v=$VAL
                   v[type]='BOOLEAN'
                   v[value]="${op[value]}"
-                  stack+=( "$VAL" )
+                  STACK+=( "$VAL" )
                   ;;
 
       # Prior to running a `mkdir`, we should've pushed a CAN_WRITE (or
@@ -161,19 +173,58 @@ while [[ $IP -lt $NUM_OPS ]] ; do
 
                   declare -n rhs="${op[rhs]}"
                   declare -n lhs="${STACK[-1]}"
-                  unset STACK[-1]
+                  STACK=( "${STACK[@]:0:${#STACK[@]}-1}" )
 
-                  
                   if [[ "${lhs[type]}" != "INTEGER" || "${rhs[type]}" != "INTEGER" ]] ; then
                      echo "Requires lhs & rhs integers." 1>&2 ; exit -1
                   fi
 
+                  v[value]='FALSE'
                   if [[ "${lhs[value]}" < "${rhs[value]}" ]] ; then
                      v[value]='TRUE'
-                  else
-                     v[value]='FALSE'
                   fi
-                  stack+=( "$VAL" )
+
+                  STACK+=( "$VAL" )
+                  ;;
+
+      'GT')       make_value
+                  declare -n v=$VAL
+                  v[type]='BOOLEAN'
+
+                  declare -n rhs="${op[rhs]}"
+                  declare -n lhs="${STACK[-1]}"
+                  STACK=( "${STACK[@]:0:${#STACK[@]}-1}" )
+
+                  if [[ "${lhs[type]}" != "INTEGER" || "${rhs[type]}" != "INTEGER" ]] ; then
+                     echo "Requires lhs & rhs integers." 1>&2 ; exit -1
+                  fi
+
+                  v[value]='FALSE'
+                  if [[ "${lhs[value]}" > "${rhs[value]}" ]] ; then
+                     v[value]='TRUE'
+                  fi
+
+                  STACK+=( "$VAL" )
+                  ;;
+
+      'EQ')       make_value
+                  declare -n v=$VAL
+                  v[type]='BOOLEAN'
+
+                  declare -n rhs="${op[rhs]}"
+                  declare -n lhs="${STACK[-1]}"
+                  STACK=( "${STACK[@]:0:${#STACK[@]}-1}" )
+
+                  if [[ "${lhs[type]}" != "${rhs[type]}" ]] ; then
+                     echo "Requires matching types." 1>&2 ; exit -1
+                  fi
+
+                  v[value]='FALSE'
+                  if [[ "${lhs[value]}" == "${rhs[value]}" ]] ; then
+                     v[value]='TRUE'
+                  fi
+
+                  STACK+=( "$VAL" )
                   ;;
 
       *) echo "OP[${op[code]}] is invalid." 1>&2
