@@ -505,9 +505,13 @@ function typedef {
 
 
 function validation {
-   munch '{' "Validation blocks open with \`{'. Or perhaps you forgot a \`;'?"
+   munch 'L_BRACE' "Validation blocks open with \`{'. Or perhaps you forgot a \`;'?"
 
-   munch '}' "Validation blocks must end with \`}'."
+   while ! check 'R_BRACE' ; do
+      pratt
+   done
+
+   munch 'R_BRACE' "Validation blocks must end with \`}'."
 }
 
 

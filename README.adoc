@@ -59,7 +59,7 @@ HEADING { BLOCK }
 
 # Example.
 global {
-   name (string): "Marcus"
+   name  string  "Marcus"
 
    # Throws exception if the path does not *already* exist.
    location (path:exists): ~/bin/conf

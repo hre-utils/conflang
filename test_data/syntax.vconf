@@ -1,1 +1,8 @@
-something type:subtype "string";
+global {
+   key  type  [
+      "one"
+      "two"
+   ];
+
+   key2 ./this;
+}
