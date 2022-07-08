@@ -79,11 +79,12 @@
 
 
 declare -A OP_1=(  [code]='IS_DIR'  [dir]='./bin'     )    # dir stuff
-declare -A OP_2=(  [code]='MKDIR'   [dir]='~/tmpdir'  )
-declare -A OP_3=(  [code]='STORE'   [value]='VAL_1'   )    # store stuff
-declare -A OP_4=(  [code]='LT'                        )    # compare stuff
+declare -A OP_2=(  [code]='MKDIR'   [dir]='./tmpdir'  )
+declare -A OP_3=(  [code]='STORE'   [value]='VAL_0'   )    # store stuff
+declare -A OP_4=(  [code]='LT'      [rhs]='VAL_1'     )    # compare stuff
 
-declare -A VAL_1=( [type]='INTEGER' [value]=4         )
+declare -A VAL_0=( [type]='INTEGER' [value]=4         )
+declare -A VAL_0=( [type]='INTEGER' [value]=5         )
 
 declare -a OP_CODES=(
    OP_1
@@ -95,20 +96,94 @@ declare -a OP_CODES=(
 declare -gi IP=0
 declare -ga STACK=()
 
+declare -g  VAL
+declare -gi VAL_NUM=1
+
+function make_value {
+   (( ++VAL_NUM ))
+   local   --  vname="VAL_${VAL_NUM}"
+   declare -gA $vname
+   declare -g  VAL=$vname
+}
+
+
+# If something external has a non-0 exit status, record the cursor information,
+# as well as anything to stdout, and the exit status in an error object.
+declare -ga  ERRORS=()
+
+
 declare -i NUM_OPS="${#OP_CODES[@]}"
-while [[ $IP -lt $NUM_OPS ]] ; then
-   declare -n op=${OP_CODE[IP]}
+while [[ $IP -lt $NUM_OPS ]] ; do
+   declare -n op=${OP_CODES[IP]}
 
    case "${op[code]}" in
       'POP')      unset STACK[-1]
                   ;;
 
-      'CONST')    STACK+=( "${op[value]}" )
-               
+      'STORE')    make_value
+                  declare -n v=$VAL
+                  declare -n op_value="${op[value]}"
+                  v[type]="${op_value[type]}"
+                  v[value]="${op_value[value]}"
+                  stack+=( "$VAL" )
+                  ;;
 
+      'IS_DIR')   make_value
+                  declare -n v=$VAL
+                  v[type]='BOOLEAN'
 
+                  if [[ -d "${op[dir]}" ]] ; then
+                     v[value]='TRUE'
+                  else
+                     v[value]='TRUE'
+                  fi
+                  ;;
+
+      'TRUE' | 'FALSE')
+                  make_value
+                  declare -n v=$VAL
+                  v[type]='BOOLEAN'
+                  v[value]="${op[value]}"
+                  stack+=( "$VAL" )
+                  ;;
+
+      # Prior to running a `mkdir`, we should've pushed a CAN_WRITE (or
+      # equivalent).
+      'MKDIR')    mkdir -p "${op[dir]}"
+                  ;;
+
+      'TOUCH')    touch "${op[dir]}"
+                  ;;
+
+      'LT')       make_value
+                  declare -n v=$VAL
+                  v[type]='BOOLEAN'
+
+                  declare -n rhs="${op[rhs]}"
+                  declare -n lhs="${STACK[-1]}"
+                  unset STACK[-1]
+
+                  
+                  if [[ "${lhs[type]}" != "INTEGER" || "${rhs[type]}" != "INTEGER" ]] ; then
+                     echo "Requires lhs & rhs integers." 1>&2 ; exit -1
+                  fi
+
+                  if [[ "${lhs[value]}" < "${rhs[value]}" ]] ; then
+                     v[value]='TRUE'
+                  else
+                     v[value]='FALSE'
+                  fi
+                  stack+=( "$VAL" )
+                  ;;
 
       *) echo "OP[${op[code]}] is invalid." 1>&2
          exit -1 ;;
    esac
+
+   (( ++IP ))
 done
+
+(
+   declare -p STACK
+   declare -p ${!VAL_*}
+) | sort -V -k3
