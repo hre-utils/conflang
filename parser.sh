@@ -221,6 +221,35 @@ function mk_typedef {
 }
 
 
+function mk_function {
+   ## psdudo.
+   #> class Function:
+   #>    name   : identifier = None
+   #>    params : array      = []
+
+   # 1) create parent
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   # 2) create list to hold the items within the section.
+   (( _NODE_NUM++ ))
+   local nname_params="NODE_${_NODE_NUM}"
+   declare -ga $nname_params
+   local   -n  node_params=$nname_params
+   node_params=()
+
+   # 3) assign child node to parent.
+   node[name]=
+   node[params]=$nname_params
+
+   # 4) Meta information, for easier parsing.
+   TYPEOF[$nname]='function'
+}
+
+
 function mk_boolean {
    ## pseudo.
    #> class Integer(Literal, bool):
@@ -508,7 +537,7 @@ function validation {
    munch 'L_BRACE' "Validation blocks open with \`{'. Or perhaps you forgot a \`;'?"
 
    while ! check 'R_BRACE' ; do
-      pratt
+      expr
    done
 
    munch 'R_BRACE' "Validation blocks must end with \`}'."
@@ -580,6 +609,111 @@ function path {
    local -n node=$NODE
    node=${CURRENT[value]}
    munch 'PATH' "$1"
+}
+
+#───────────────────────────────( expressions )─────────────────────────────────
+# Thanks daddy Pratt.
+
+declare -gA prefix_binding_power=(
+   [NOT]='13'
+   [BANG]='13'
+   [MINUS]='13'
+)
+
+declare -gA NUD=(
+   [NOT]='unary'
+   [BANG]='unary'
+   [MINUS]='unary'
+   [PATH]='path'
+   [TRUE]='literal'
+   [STRING]='string'
+   [INTEGER]='integer'
+   [IDENTIFIER]='identifier'
+   [L_PAREN]='group'
+)
+
+
+declare -gA LED=(
+   [OR]='compop'
+   [AND]='compop'
+   [EQ]='binary'
+   [NE]='binary'
+   [LT]='binary'
+   [LE]='binary'
+   [GT]='binary'
+   [GE]='binary'
+   [PLUS]='binary'
+   [MINUS]='binary'
+   [STAR]='binary'
+   [SLASH]='binary'
+   [L_PAREN]='function'
+)
+
+declare -gA infix_binding_power=(
+   [OR]='3'
+   [AND]='3'
+   [EQ]='5'
+   [NE]='5'
+   [LT]='7'
+   [LE]='7'
+   [GT]='7'
+   [GE]='7'
+   [PLUS]='9'
+   [MINUS]='9'
+   [STAR]='11'
+   [SLASH]='11'
+   [L_PAREN]='13'
+)
+
+
+function expr {
+   local -i min_bp=${1:-1}
+
+   local -- fn=${nud[${CURRENT[type]}]}
+   if [[ -z $fn ]] ; then
+      echo "No NUD defined for ${CURRENT[type]}." 1>&2
+      exit -1 # TODO: Real escape codes here.
+   fi
+
+   local lhs="$NODE"
+   advance
+
+   while :; do
+      local -- op=$CURRENT ot=${CURRENT[type]}
+
+      local -i  rbp  lbp=${infix_binding_power[ot]:-0}
+      (( rbp = lbp + 1 )) 
+
+      if [[ $rbp -lt $min_bp ]] ; then
+         break
+      fi
+
+      advance
+
+      fn=${led[${CURRENT[type]}]}
+      $fn  "$lhs"  "$op"  "$rbp"
+
+      lhs=$NODE
+   done
+
+   declare -g NODE=$lhs
+}
+
+
+function group {
+   echo -n
+}
+
+function binary {
+   echo -n
+}
+
+function unary {
+   echo -n
+}
+
+function literal {
+   echo -n
 }
 
 

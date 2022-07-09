@@ -128,6 +128,18 @@ while [[ $IP -lt $NUM_OPS ]] ; do
    declare -n op=${OP_CODES[IP]}
 
    case "${op[code]}" in
+      ## STATEMENTS.
+      ## (It does not have an impact on the stack.)
+      # Prior to running a `mkdir`, we should've pushed a CAN_WRITE (or
+      # equivalent).
+      'MKDIR')    mkdir -p "${op[dir]}"
+                  ;;
+
+      'TOUCH')    touch "${op[dir]}"
+                  ;;
+
+      ## EXPRESSIONS
+      ## (It does have an impact on the stack.)
       'POP')      STACK=( "${STACK[@]:0:${#STACK[@]}-1}" )
                   ;;
 
@@ -157,14 +169,6 @@ while [[ $IP -lt $NUM_OPS ]] ; do
                   v[type]='BOOLEAN'
                   v[value]="${op[value]}"
                   STACK+=( "$VAL" )
-                  ;;
-
-      # Prior to running a `mkdir`, we should've pushed a CAN_WRITE (or
-      # equivalent).
-      'MKDIR')    mkdir -p "${op[dir]}"
-                  ;;
-
-      'TOUCH')    touch "${op[dir]}"
                   ;;
 
       'LT')       make_value
