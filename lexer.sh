@@ -264,11 +264,9 @@ function path {
       # Need to think this through a little bit more. Right now we're making the
       # decision that paths cannot contain a semicolon. Which, to be fair, they
       # should not, as that's wicked confusing.
-      if [[ $PEEK == ';' ]] ; then
+      if [[ $CURRENT == ';' ]] ; then
          break
-      fi
-
-      if [[ $CURRENT =~ [[:space:]] ]] ; then
+      elif [[ $CURRENT =~ [[:space:]] ]] ; then
          if [[ ${buffer[-1]} == '\' ]] ; then
             unset buffer[-1]
          else
