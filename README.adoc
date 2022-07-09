@@ -1,219 +1,50 @@
-= confLang
+= conflang
 
 Declarative config file `"language"` with ``assert``-based data validation.
 
 
-== Goals
-=== Declarative
-
-Define the state we want to see, not how to get it there.
-`"These files should exist"`.
-`"These vars should be set, or with these fallbacks."`
-
-=== Validated
-
-There are types.
-(Gasp).
-
-.Primitive types
-. Integer
-. String
-. Array
-. Path
-
-Tiny `stdlib` providing basic *query* methods.
-
-.Example
-Logical  ::
-   `and`, `or`, `not`, `equals`
-Strings  ::
-   `len()`
-aArrays  ::
-   `len()`
-iArrays  ::
-   `get()`, `len()`
-Paths    ::
-   `is_owner(STRING)`, `has_execute(STRING)`, `exists()`, `is_empty()`, `is_dir()`
-
-Methods are only comparisons, or `"query"`-based operators used to assert state in validation.
-They can have no side-effects.
-
-
-=== FFI
-
-Ability to add new types, or new methods, through a FFI.
-Naturally these will be written in bash.
-
-Not ennttiirrrreeely sure how this is going to work yet.
-
-
-=== Import(s)
-
-Must be able to import other config files, either from a path relative to each config file, or globally.
-
-
 == Syntax
 
+First thing anyone wants to see is some example syntax.
+
+.config.cfg
 ----
-HEADING { BLOCK }
+name  "Marcus";
+age   30;
 
-# Example.
-global {
-   name  string  "Marcus"
+projects [
+   "shql"
+   "conf"
+];
 
-   # Throws exception if the path does not *already* exist.
-   location (path:exists): ~/bin/conf
+globals {
+   scope  "outer";
 
-   # Creates empty file at the destination if it does not exist.
-   location (path:file): ~/bin/conf
-   # Effectively:
-   #> mkdir -p ${location%/*} && touch ${location}
-   # This should be idempotent, regardless if file or directory.
-   # Directories though must end in a trailing slash.
-}
-
-# Or maybe:
-global {
-   name (string): "Marcus" {
-      len(self) > 10;
-      is_upper(self[0]);
+   sub-heading {
+      scope  "inner";
    }
 }
-
-# I kinda like the above, nice to have the key & value right next to each other,
-# but what about:
-global {
-   name {
-      len(self) > 10;
-      is_upper(self[0]);
-   }: "Marcus"
-}
-# Nope, this is only more difficult to read. Particularly if we needed to do
-# multi-line values, or an array, or something like that.
-
-things: [
-   "one",
-   "two",
-   "three"
-] {
-   array[string];
-   len(self) < 5;
-}
-
-location: ~/bin/ {
-   path:exists
-}
-----
-
-Okay drop everything.
-
-This is only useful if the programmer is writing a data language for himself.
-We need to make something that is a supplement to your standard _.cfg_ file.
-
-Mostly exactly like the above, but as a _script-writer's config_,
-to enforce the user provides acceptable and useful values to the programmer.
-
-----
-# Programmer's .cfg
-global {
-   name: string {
-      required(self);      # Don't love this way of representing it.
-      len(self) > 2;       # `len` as shorthand for `len(self)`?
-      is_upper(self[0]);
-   }
-
-   age: int {
-      required;
-      self < 100;
-      self > 0;
-      help("
-         Help text here. There should be a cli option to generate the user.cfg
-         file, based upon this, and this help text will be dropped above each
-         section in the file. The line is dedented matching the indentation of
-         the first line of whitespace (after stripping leading $'\n').
-      ")
-   }
-
-   homedir: path[dir] {
-      exists(self);
-   }
-}
-
-# User's .cfg
-global {
-   name : "Marcus"
-   age  : 30
-}
-----
-
-By importing the `conflang.sh` library, we do not need to write validation logic in the program.
-It's separated into our expects.cfg, and the standard library.
-
-
-== User experience (programmer)
-
-[source, bash]
-----
-source /path/to/conflang/std
-source /path/to/conflang  expects.cfg  user.cfg
-
-name=$( CONFIG global name )
-----
-
-`conflang` will initially md5sum the _{expects,user}.cfg_ files.
-If they've already been compiled, echo the compiled versions with no further parsing.
-Else parse, and write compiled `.sh` versions to cache somewhere.
-
-Thus, the parsing can be very slow, but the stdlib and associated validation functions & reporting should be as fast as possible.
-Definitely optimizing for speed over legibility and "clean" code.
-
-
-== User experience (end user)
-
-Error reporting is the ONLY thing that matters.
-It must show the line number in which an error has occurred.
-It must have toggleable --color options to help easily indicate where the problem was.
-Message must be as specific as possible.
-
-Example
-
-----
-  1 | global {
-  2 |    name: {
-  3 |        ^ ^
-  4 |        +-+--- Error began here
-  5 |          +--- And reported here: expected type name after `:', received `{'
-  6 |    }
-  7 | }
 ----
 
 
-== Design
+== Theory
 
-Split into three parts.
-The compiler, API, and standard library.
+Writing small shell files that take configuration parameters can be tricky and tiresome.
+Do you trust the user's input, or validate everything?
+How to handle idempotency?
+For an important utility (backups, managing services) it is vital that input is valid.
+Crashing half way through a backup because an intermediate path does not exist is bad.
+There are often many ways to handle data type mismatches, or invalid input.
 
-=== Compiler
+I hope to resolve some of those problems with:
 
-Reads user & programmer's `.cfg` files.
-Parses into an internal bash representation of the data.
-Creates symbol table.
-Dumps resulting compiled functions & arrays, ideally w/ `declare -p ; declare -f`.
-
-Ideally need to be able to re-use the lexer, parser, and compiler for both parts of the config file.
-
-=== API
-
-Functions exposed by `conflang` for the programmer to access values, and `"validation objects"`.
-
-
-=== Standard library
+. Declarative, validated, strongly-typed configuration files
+. Easily accessible parameters for the developer
+. Simple to configure for end users
+  .. With _optional_ room to add validation & complexity
+. Good error reporting for everyone
 
 
-== Speed
-
-Need to do some experiments on how to make this much, much faster.
-`shql` was unusable due to how slow it ended up being.
-`mkconf` isn't that much faster.
-
-Need to profile. stuff
+== Use
+=== Developers
+=== End users
