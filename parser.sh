@@ -250,6 +250,35 @@ function mk_function {
 }
 
 
+function mk_binary {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -ga $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   node[op]=
+   node[left]=
+   node[right]=
+
+   TYPEOF[$nname]='binary'
+}
+
+
+function mk_unary {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -ga $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   node[op]=
+   node[right]=
+
+   TYPEOF[$nname]='unary'
+}
+
+
 function mk_boolean {
    ## pseudo.
    #> class Integer(Literal, bool):
@@ -394,16 +423,6 @@ function match {
 }
 
 
-function peek {
-   if [[ "${PEEK[type]}" == $1 ]] ; then
-      advance
-      return 0
-   fi
-   
-   return 1
-}
-
-
 function munch {
    if ! check $1 ; then
       raise_parse_error "$1" "$2"
@@ -493,19 +512,25 @@ function element {
       node[type]=$NODE
    fi
 
-   # TODO: This isn't actually a great check, as we want to make sure the user
-   # DOES close an empty identifier definition with a semicolon, which we're
-   # not accounting for here.
+   ## TODO: This isn't actually a great check, as we want to make sure the user
+   ## DOES close an empty identifier definition with a semicolon, which we're
+   ## not accounting for here.
+   #if ! check ';' ; then
+   #   data
+   #   node[data]=$NODE
+   #fi
+
+   #if check '{' ; then
+   #   validation
+   #   node[validation]=$NODE
+   #else
+   #   munch 'SEMI' "Data blocks must close with \`;'."
+   #fi
+
    if ! check ';' ; then
       data
       node[data]=$NODE
-   fi
-
-   if check '{' ; then
-      validation
-      node[validation]=$NODE
-   else
-      munch 'SEMI' "Data blocks must close with \`;'."
+      munch 'SEMI' "expecting \`;' after element"
    fi
 
    declare -g NODE=$save
@@ -614,107 +639,164 @@ function path {
 #───────────────────────────────( expressions )─────────────────────────────────
 # Thanks daddy Pratt.
 
-declare -gA prefix_binding_power=(
-   [NOT]='13'
-   [BANG]='13'
-   [MINUS]='13'
-)
-
-declare -gA NUD=(
-   [NOT]='unary'
-   [BANG]='unary'
-   [MINUS]='unary'
-   [PATH]='path'
-   [TRUE]='literal'
-   [STRING]='string'
-   [INTEGER]='integer'
-   [IDENTIFIER]='identifier'
-   [L_PAREN]='group'
-)
-
-
-declare -gA LED=(
-   [OR]='compop'
-   [AND]='compop'
-   [EQ]='binary'
-   [NE]='binary'
-   [LT]='binary'
-   [LE]='binary'
-   [GT]='binary'
-   [GE]='binary'
-   [PLUS]='binary'
-   [MINUS]='binary'
-   [STAR]='binary'
-   [SLASH]='binary'
-   [L_PAREN]='function'
-)
-
-declare -gA infix_binding_power=(
-   [OR]='3'
-   [AND]='3'
-   [EQ]='5'
-   [NE]='5'
-   [LT]='7'
-   [LE]='7'
-   [GT]='7'
-   [GE]='7'
-   [PLUS]='9'
-   [MINUS]='9'
-   [STAR]='11'
-   [SLASH]='11'
-   [L_PAREN]='13'
-)
-
-
-function expr {
-   local -i min_bp=${1:-1}
-
-   local -- fn=${nud[${CURRENT[type]}]}
-   if [[ -z $fn ]] ; then
-      echo "No NUD defined for ${CURRENT[type]}." 1>&2
-      exit -1 # TODO: Real escape codes here.
-   fi
-
-   local lhs="$NODE"
-   advance
-
-   while :; do
-      local -- op=$CURRENT ot=${CURRENT[type]}
-
-      local -i  rbp  lbp=${infix_binding_power[ot]:-0}
-      (( rbp = lbp + 1 )) 
-
-      if [[ $rbp -lt $min_bp ]] ; then
-         break
-      fi
-
-      advance
-
-      fn=${led[${CURRENT[type]}]}
-      $fn  "$lhs"  "$op"  "$rbp"
-
-      lhs=$NODE
-   done
-
-   declare -g NODE=$lhs
-}
-
-
-function group {
-   echo -n
-}
-
-function binary {
-   echo -n
-}
-
-function unary {
-   echo -n
-}
-
-function literal {
-   echo -n
-}
+#declare -gA prefix_binding_power=(
+#   [NOT]='13'
+#   [BANG]='13'
+#   [MINUS]='13'
+#)
+#
+#declare -gA NUD=(
+#   [NOT]='expr_unary'
+#   [BANG]='expr_unary'
+#   [MINUS]='expr_unary'
+#   [PATH]='expr_path'
+#   [TRUE]='expr_boolean'
+#   [FALSE]='expr_boolean'
+#   [STRING]='expr_string'
+#   [INTEGER]='expr_integer'
+#   [IDENTIFIER]='expr_identifier'
+#   [L_PAREN]='expr_group'
+#)
+#
+#
+#declare -gA LED=(
+#   [OR]='expr_compop'
+#   [AND]='expr_compop'
+#   [EQ]='expr_binary'
+#   [NE]='expr_binary'
+#   [LT]='expr_binary'
+#   [LE]='expr_binary'
+#   [GT]='expr_binary'
+#   [GE]='expr_binary'
+#   [PLUS]='expr_binary'
+#   [MINUS]='expr_binary'
+#   [STAR]='expr_binary'
+#   [SLASH]='expr_binary'
+#   [L_PAREN]='expr_function'
+#)
+#
+#declare -gA infix_binding_power=(
+#   [OR]='3'
+#   [AND]='3'
+#   [EQ]='5'
+#   [NE]='5'
+#   [LT]='7'
+#   [LE]='7'
+#   [GT]='7'
+#   [GE]='7'
+#   [PLUS]='9'
+#   [MINUS]='9'
+#   [STAR]='11'
+#   [SLASH]='11'
+#   [L_PAREN]='13'
+#)
+#
+#
+#function expr {
+#   local -i min_bp=${1:-1}
+#
+#   local -- fn=${nud[${CURRENT[type]}]}
+#   if [[ -z $fn ]] ; then
+#      echo "No NUD defined for ${CURRENT[type]}." 1>&2
+#      exit -1 # TODO: Real escape codes here.
+#   fi
+#
+#   local lhs="$NODE"
+#   advance
+#
+#   while :; do
+#      local -- op=$CURRENT ot=${CURRENT[type]}
+#
+#      local -i  rbp  lbp=${infix_binding_power[ot]:-0}
+#      (( rbp = lbp + 1 )) 
+#
+#      if [[ $rbp -lt $min_bp ]] ; then
+#         break
+#      fi
+#
+#      advance
+#
+#      fn=${led[${CURRENT[type]}]}
+#      $fn  "$lhs"  "$op"  "$rbp"
+#
+#      lhs=$NODE
+#   done
+#
+#   declare -g NODE=$lhs
+#}
+#
+#
+#function expr_group {
+#   parse 
+#   munch 'R_PAREN' "expecting \`)' after group"
+#}
+#
+#function expr_binary {
+#   local -- lhs="$1" op="$2" rbp="$3"
+#
+#   mk_binary
+#   local -- save=$NODE
+#   local -n node=$NODE
+#
+#   expr "$rbp"
+#
+#   node[op]="$op"
+#   node[left]="$lhs"
+#   node[right]="$NODE"
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function expr_unary {
+#   local -- op="$2" rbp="$3"
+#
+#   mk_binary
+#   local -- save=$NODE
+#   local -n node=$NODE
+#
+#   expr "$rbp"
+#
+#   node[op]="$op"
+#   node[right]="$NODE"
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function expr_integer {
+#   mk_integer
+#   local -n node=$NODE
+#   node=${CURRENT[value]}
+#}
+#
+#
+#function expr_literal {
+#   mk_boolean
+#   local -n node=$NODE
+#   node=${CURRENT[value]}
+#}
+#
+#
+#function expr_path {
+#   mk_boolean
+#   local -n node=$NODE
+#   node=${CURRENT[value]}
+#}
+#
+#
+#function expr_string {
+#   mk_boolean
+#   local -n node=$NODE
+#   node=${CURRENT[value]}
+#}
+#
+#
+#function expr_identifier {
+#   mk_identifier
+#   local -n node=$NODE
+#   node=${CURRENT[value]}
+#}
 
 
 #════════════════════════════════════╡ GO ╞═════════════════════════════════════
