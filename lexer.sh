@@ -218,7 +218,7 @@ function identifier {
 
    kw="${KEYWORD[$buffer]}" 
    if [[ -n $kw ]] ; then
-      Token "$buffer" "$buffer"
+      Token "$kw" "$buffer"
    else
       Token 'IDENTIFIER' "$buffer"
    fi

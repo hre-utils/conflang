@@ -447,9 +447,7 @@ function program {
 
 function named {
    identifier
-   munch 'IDENTIFIER' "expecting sections only contain elements" 1>&2
-   # TODO: error reporting;
-   # This isn't the most useful error message.
+   munch 'IDENTIFIER' "expecting named element here: identifier is missing." 1>&2
 
    # Section:
    # If looks like:  `identifier { ... }`,  then it's a section
@@ -477,7 +475,7 @@ function section {
       items+=( $NODE )
    done
 
-   munch 'R_BRACE'
+   munch 'R_BRACE' "expecting \`}' after section." 1>&2
    declare -g NODE=$save
 }
 
@@ -496,21 +494,6 @@ function element {
       typedef
       node[type]=$NODE
    fi
-
-   ## TODO: This isn't actually a great check, as we want to make sure the user
-   ## DOES close an empty identifier definition with a semicolon, which we're
-   ## not accounting for here.
-   #if ! check ';' ; then
-   #   data
-   #   node[data]=$NODE
-   #fi
-
-   #if check '{' ; then
-   #   validation
-   #   node[validation]=$NODE
-   #else
-   #   munch 'SEMI' "Data blocks must close with \`;'."
-   #fi
 
    if ! check ';' ; then
       data
@@ -544,13 +527,13 @@ function typedef {
 
 
 function validation {
-   munch 'L_BRACE' "Validation blocks open with \`{'. Or perhaps you forgot a \`;'?"
+   munch 'L_BRACE' "expecting \`{' to open validation block. Perhaps you forgot a \`;' closing the last element?"
 
    while ! check 'R_BRACE' ; do
       expr
    done
 
-   munch 'R_BRACE' "Validation blocks must end with \`}'."
+   munch 'R_BRACE' "expecting \`}' after validation block."
 }
 
 
@@ -577,7 +560,7 @@ function array {
    done
 
    declare -g NODE=$save
-   munch 'R_BRACKET' "Array blocks must end with \`]'."
+   munch 'R_BRACKET' "expecting \`]' after array."
 }
 
 
