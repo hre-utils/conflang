@@ -279,25 +279,17 @@ function mk_unary {
 }
 
 
-function mk_boolean {
-   ## pseudo.
-   #> class Integer(Literal, bool):
-   #>    pass
-
+function mk_literal {
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
    declare -g NODE=$nname
 
-   TYPEOF[$nname]='identifier'
+   TYPEOF[$nname]='literal'
 }
 
 
 function mk_integer {
-   ## pseudo.
-   #> class Integer(Literal, int):
-   #>    pass
-
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -gi $nname
@@ -308,10 +300,6 @@ function mk_integer {
 
 
 function mk_string {
-   ## pseudo.
-   #> class Integer(Literal, str):
-   #>    pass
-
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
@@ -322,10 +310,6 @@ function mk_string {
 
 
 function mk_path {
-   ## pseudo.
-   #> class Integer(Literal, str):
-   #>    pass
-
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
@@ -336,10 +320,6 @@ function mk_path {
 
 
 function mk_identifier {
-   ## pseudo.
-   #> class Integer(Literal, str):
-   #>    pass
-
    (( _NODE_NUM++ ))
    local nname="NODE_${_NODE_NUM}"
    declare -g $nname
@@ -363,6 +343,8 @@ declare -- PEEK     PEEK_NAME
 
 
 function advance { 
+   #echo "CURRENT[$(declare -p $CURRENT_NAME)]"
+
    while [[ $IDX -lt ${#TOKENS[@]} ]] ; do
       declare -g  CURRENT_NAME=${TOKENS[IDX]}
       declare -gn CURRENT=$CURRENT_NAME
@@ -464,7 +446,10 @@ function program {
 
 
 function named {
-   identifier "Sections may only contain sub-sections & elements."
+   identifier
+   munch 'IDENTIFIER' "expecting sections only contain elements" 1>&2
+   # TODO: error reporting;
+   # This isn't the most useful error message.
 
    # Section:
    # If looks like:  `identifier { ... }`,  then it's a section
@@ -540,7 +525,7 @@ function element {
 function typedef {
    # Store current `identifier' token. Reaching this method is contingent upon
    # the current token *being* an identifier, so we're safe.
-   identifier
+   identifier ; advance
    local -- name=$NODE
 
    mk_typedef
@@ -571,18 +556,17 @@ function validation {
 
 function data {
    case "${CURRENT[type]}" in
-      'L_BRACKET')  array    ;;
-      'BOOLEAN')    boolean  ;;
-      'INTEGER')    integer  ;;
-      'STRING')     string   ;;
-      'PATH')       path     ;;
+      'L_BRACKET')  advance ; array    ;;
+      'INTEGER')    advance ; integer  ;;
+      'STRING')     advance ; string   ;;
+      'FALSE')      advance ; literal  ;;
+      'TRUE')       advance ; literal  ;;
+      'PATH')       advance ; path     ;;
    esac
 }
 
 
 function array {
-   munch 'L_BRACKET'
-
    mk_array
    local -- save=$NODE
    local -n node=$NODE
@@ -600,40 +584,35 @@ function array {
 function identifier {
    mk_identifier
    local -n node=$NODE
-   node=${CURRENT[value]}
-   munch 'IDENTIFIER' "$1"
+   node=$CURRENT
 }
 
 
-function boolean {
-   mk_boolean
+function literal {
+   mk_literal
    local -n node=$NODE
-   node=${CURRENT[value]}
-   munch 'BOOLEAN' "$1"
+   node=$CURRENT
 }
 
 
 function integer {
    mk_integer
    local -n node=$NODE
-   node=${CURRENT[value]}
-   munch 'INTEGER' "$1"
+   node=$CURRENT
 }
 
 
 function string {
    mk_string
    local -n node=$NODE
-   node=${CURRENT[value]}
-   munch 'STRING' "$1"
+   node=$CURRENT
 }
 
 
 function path {
    mk_path
    local -n node=$NODE
-   node=${CURRENT[value]}
-   munch 'PATH' "$1"
+   node=$CURRENT
 }
 
 #───────────────────────────────( expressions )─────────────────────────────────

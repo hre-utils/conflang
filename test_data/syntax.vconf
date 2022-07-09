@@ -1,1 +1,7 @@
-this "str";
+global {
+   this [
+      "one"
+      "two"
+      "three"
+   ];
+}
