@@ -260,20 +260,24 @@ function path {
    local -a buffer=( $prefix )
 
    while [[ -n $CURRENT ]] ; do
-      # TODO;FIXME:
-      # Need to think this through a little bit more. Right now we're making the
-      # decision that paths cannot contain a semicolon. Which, to be fair, they
-      # should not, as that's wicked confusing.
-      if [[ $CURRENT == ';' ]] ; then
-         break
-      elif [[ $CURRENT =~ [[:space:]] ]] ; then
+      if [[ $CURRENT =~ [[:space:]] ]] ; then
          if [[ ${buffer[-1]} == '\' ]] ; then
             unset buffer[-1]
          else
             break
          fi
       fi
+
       buffer+=( "$CURRENT" )
+
+      # Our only "rules" for paths are:
+      #  1. They may not contain unescaped spaces
+      #  2. They may not contain semicolons
+      # Though both may be mitigated by using a string, then casting to a path.
+      if [[ $PEEK == ';' ]] ; then
+         break
+      fi
+
       advance
    done
 

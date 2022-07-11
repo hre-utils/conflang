@@ -1,1 +1,7 @@
-this true;
+global {
+   one [
+      "two"
+      "three"
+      "four"
+   ];
+}

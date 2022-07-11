@@ -9,102 +9,48 @@
 #
 #---
 # TODO:
-#  [ ] OOPS I forgot booleans
-#      - Just going to use true/false, not yaml's yes/no/1/0 nonsense
 #  [ ] Tracebacks!
 #      - What a good opportunity for me to work on that bash traceback nonsense
 #        I was trying to figure out a while ago.
-#  [ ] I hate how `munch()` works right now
-
-
-# Need to think through the structure of the file a little more. Both to write a
-# grammer, but also to make something that can be used to parse the programmer's
-# .cfg, as well as the user's. Still not 100% on how I want that split to work.
-# It very well may end up being such that they're the same thing. The user's is
-# sourced second, and only settings in direct conflict supersede prior ones.
+#  [x] I hate how `munch()` works right now
+#  [x] OOPS I forgot booleans
+#      - Just going to use true/false, not yaml's yes/no/1/0 nonsense
 #
-# List items are separated by any whitespace.
+#---
+
+
 :<<'COMMENT'
-   SECTION_NAME {
-      # Key/value pairs.
-      key type:subtype default_value {
-         assert_1;
-         assert_2;
-         assert_3;
-      }
+CURRENT.
+   Seemingly getting an offset for variable declaration nodes. Haven't spent the
+   time to figure out which values are wrong, and what the right ones should be,
+   but it's definitely jumbly as shit.
 
-      # Lists.
-      key type:subtype [
-         item_1
-         item_2
-         item_3
-      ] {
-         assert_1;
-         assert_2;
-         assert_3;
-      }
 
-      # Boils down to.
-      identifier  identifier[:identifier]*  [data]  ['{' expr_list '}']  ';'
-   }
+GRAMMAR.
+   program        -> decl EOF
 
-   EBNF-ish
-      # Not entirely accurate, as we implicitly create an %inline section as
-      # the root.
-      program     -> section EOF
+   declaration    -> decl_sec
+                   | decl_var
 
-      # Within a section can only be named-elements. Can't have a section with a
-      # raw array, for example, as there's no way to reference it.
-      section     -> identifier '{' named* '}'
+   decl_section   -> identifier '{' declaration* '}'
 
-      # Can easily identify if we're opening a section block, or an
-      # array/literal, as the former is differentiated by an opening '{'.
-      named       -> section
-                   | element
+   decl_variable  -> identifier [type] [expression] [';' | validation]
 
-      element    -> identifier [type] [data] [validation] ';'
+   type           -> identifier (':' identifier)*
 
-      # Data has to be separate from section & named, to differentiate what can
-      # be typed, and which element requires an identifier.
-      data        -> array
+   validation     -> '{' expr_list '}'
+
+   expr_list      -> expression (';' expression)*
+
+   expression     -> array
                    | literal
 
-      array       -> type '[' data* ']' asserts
+   array          -> '[' expr_list ']'
 
-      # The final expression does not require 
-      asserts     -> '{' expr_list '}'
-
-      expr_list   -> expr_list ';'
-                   | expression
-
-      type        -> identifier [':' identifier]*
-
-      validation  -> '{' expr* '}'
-
-      expr_list   -> expr ';'
-
-      literal     -> string
+   literal        -> string
                    | integer
                    | path
                    | boolean
-
-
-   # Default top-level section created by the parser.
-   %inline {
-      # Only "named" elements can go here.
-      key "data";
-
-      key [
-         "data"
-         "data2"
-      ];
-      # Arrays are separated by whitespace, and terminated by a closing ']'.
-      # Arrays and named literals must be terminated with a ';'.
-
-      section { }
-      # Sections do not need to end in an 
-   }
-
 COMMENT
 
 
@@ -128,12 +74,7 @@ declare -i _NODE_NUM=0
 declare -A TYPEOF=()
 
 
-function mk_section {
-   ## psdudo.
-   #> class Section:
-   #>    name  : identifier = None
-   #>    items : array      = []
-
+function mk_decl_section {
    # 1) create parent
    (( _NODE_NUM++ ))
    local   --  nname="NODE_${_NODE_NUM}"
@@ -153,20 +94,11 @@ function mk_section {
    node[items]=$nname_items
 
    # 4) Meta information, for easier parsing.
-   TYPEOF[$nname]='section'
+   TYPEOF[$nname]='decl_section'
 }
 
 
-function mk_element {
-   ## psdudo.
-   #> class Named:
-   #>    name       : identifier = None
-   #>    type       : Type       = None     (opt)
-   #>    data       : Data       = None     (opt)
-   #>    validation : Validation = None     (opt)
-   #
-   # $Data may be either an $Array or literal.
-
+function mk_decl_variable {
    (( _NODE_NUM++ ))
    local   --  nname="NODE_${_NODE_NUM}"
    declare -gA $nname
@@ -175,10 +107,10 @@ function mk_element {
 
    node[name]=       # identifier
    node[type]=       # type
-   node[data]=       # section, array, int, str, bool, path
-   node[validation]=
+   node[expr]=       # section, array, int, str, bool, path
+   #node[validation]=
    
-   TYPEOF[$nname]='element'
+   TYPEOF[$nname]='decl_variable'
 }
 
 
@@ -268,7 +200,7 @@ function mk_binary {
 function mk_unary {
    (( _NODE_NUM++ ))
    local   --  nname="NODE_${_NODE_NUM}"
-   declare -ga $nname
+   declare -gA $nname
    declare -g  NODE=$nname
    local   -n  node=$nname
 
@@ -279,21 +211,35 @@ function mk_unary {
 }
 
 
-function mk_literal {
+function mk_boolean {
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
+   local   -- nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
 
-   TYPEOF[$nname]='literal'
+   # Copied over, so we can ditch the raw tokens after the parser.
+   node[value]=
+   node[offset]=
+   node[lineno]=
+   node[colno]=
+
+   TYPEOF[$nname]='boolean'
 }
 
 
 function mk_integer {
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -gi $nname
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
    declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   # Copied over, so we can ditch the raw tokens after the parser.
+   node[value]=
+   node[offset]=
+   node[lineno]=
+   node[colno]=
 
    TYPEOF[$nname]='integer'
 }
@@ -301,9 +247,16 @@ function mk_integer {
 
 function mk_string {
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   # Copied over, so we can ditch the raw tokens after the parser.
+   node[value]=
+   node[offset]=
+   node[lineno]=
+   node[colno]=
 
    TYPEOF[$nname]='string'
 }
@@ -311,9 +264,16 @@ function mk_string {
 
 function mk_path {
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
+   local   -- nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   # Copied over, so we can ditch the raw tokens after the parser.
+   node[value]=
+   node[offset]=
+   node[lineno]=
+   node[colno]=
 
    TYPEOF[$nname]='identifier'
 }
@@ -321,9 +281,16 @@ function mk_path {
 
 function mk_identifier {
    (( _NODE_NUM++ ))
-   local nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
+   local   -- nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   # Copied over, so we can ditch the raw tokens after the parser.
+   node[value]=
+   node[offset]=
+   node[lineno]=
+   node[colno]=
 
    TYPEOF[$nname]='identifier'
 }
@@ -335,16 +302,9 @@ declare -- CURRENT  CURRENT_NAME
 declare -- PEEK     PEEK_NAME
 # Calls to `advance' both globally set the name of the current/next node(s),
 # e.g., `TOKEN_1', as well as declaring a nameref to the variable itself.
-#
-# TODO:
-# I could probably save myself pretty significant headache by also adding a
-# PREVIOUS{,_NAME} var(s), such that I can just munch an identifier, and still
-# access the data from it.
 
 
 function advance { 
-   #echo "CURRENT[$(declare -p $CURRENT_NAME)]"
-
    while [[ $IDX -lt ${#TOKENS[@]} ]] ; do
       declare -g  CURRENT_NAME=${TOKENS[IDX]}
       declare -gn CURRENT=$CURRENT_NAME
@@ -352,6 +312,8 @@ function advance {
       declare -g  PEEK_NAME=${TOKENS[IDX+1]}
       if [[ -n $PEEK_NAME ]] ; then
          declare -gn PEEK=$PEEK_NAME
+      else
+         declare -g PEEK=
       fi
 
       if [[ ${CURRENT[type]} == 'ERROR' ]] ; then
@@ -429,15 +391,22 @@ function program {
    #
    # Creates a default top-level `section', allowing top-level key:value pairs,
    # wout requiring a dict (take that, JSON).
-   mk_section
+   mk_identifier
+   local -- nname=$NODE
+   local -n name=$nname
+   name[value]='%inline'
+   name[offset]=0
+   name[lineno]=0
+   name[colno]=0
+
+   mk_decl_section
    local -n node=$NODE
    local -n items=${node[items]}
 
-   declare -g NODE_0='%inline'
-   node[name]=$NODE_0
+   node[name]=$nname
 
    while ! check 'EOF' ; do
-      named
+      declaration
       items+=( $NODE )
    done
 
@@ -445,25 +414,22 @@ function program {
 }
 
 
-function named {
+function declaration {
    identifier
-   munch 'IDENTIFIER' "expecting named element here: identifier is missing." 1>&2
+   munch 'IDENTIFIER' "expecting variable declaration: identifier is missing." 1>&2
 
-   # Section:
-   # If looks like:  `identifier { ... }`,  then it's a section
    if match 'L_BRACE' ; then
-      section
+      decl_section
    else
-      element
+      decl_variable
    fi
 }
 
 
-function section {
-   # Elements must be preceded by an identifier.
+function decl_section {
    local -- name=$NODE
 
-   mk_section
+   mk_decl_section
    local -- save=$NODE
    local -n node=$NODE
    local -n items=${node[items]}
@@ -471,7 +437,7 @@ function section {
    node[name]=$name
 
    while ! check 'R_BRACE' ; do
-      named
+      declaration
       items+=( $NODE )
    done
 
@@ -480,11 +446,11 @@ function section {
 }
 
 
-function element {
-   # Elements must be preceded by an identifier.
+function decl_variable {
+   # Variable declaration must be preceded by an identifier.
    local -- name=$NODE
 
-   mk_element
+   mk_decl_variable
    local -- save=$NODE
    local -n node=$NODE
 
@@ -496,9 +462,10 @@ function element {
    fi
 
    if ! check ';' ; then
-      data
-      node[data]=$NODE
-      munch 'SEMI' "expecting \`;' after element"
+      expression
+      node[expr]=$NODE
+      #munch 'SEMI' "expecting \`;' after variable declaration"
+   #else validate
    fi
 
    declare -g NODE=$save
@@ -527,7 +494,7 @@ function typedef {
 
 
 function validation {
-   munch 'L_BRACE' "expecting \`{' to open validation block. Perhaps you forgot a \`;' closing the last element?"
+   munch 'L_BRACE' "expecting \`{' to open validation block. Perhaps you forgot a \`;' closing the last expression?"
 
    while ! check 'R_BRACE' ; do
       expr
@@ -537,228 +504,219 @@ function validation {
 }
 
 
-function data {
-   case "${CURRENT[type]}" in
-      'L_BRACKET')  advance ; array    ;;
-      'INTEGER')    advance ; integer  ;;
-      'STRING')     advance ; string   ;;
-      'FALSE')      advance ; literal  ;;
-      'TRUE')       advance ; literal  ;;
-      'PATH')       advance ; path     ;;
-   esac
-}
-
-
 function array {
+   munch 'L_BRACKET'
+
    mk_array
    local -- save=$NODE
    local -n node=$NODE
 
    while ! check 'R_BRACKET' ; do
-      data
+      expression
       node+=( $NODE )
    done
 
-   declare -g NODE=$save
    munch 'R_BRACKET' "expecting \`]' after array."
+   declare -g NODE=$save
 }
 
 
 function identifier {
    mk_identifier
    local -n node=$NODE
-   node=$CURRENT
+   node[value]=${CURRENT[value]}
+   node[offset]=${CURRENT[offset]}
+   node[lineno]=${CURRENT[lineno]}
+   node[colno]=${CURRENT[colno]}
 }
 
 
-function literal {
-   mk_literal
+function boolean {
+   mk_boolean
    local -n node=$NODE
-   node=$CURRENT
+   node[value]=${CURRENT[value]}
+   node[offset]=${CURRENT[offset]}
+   node[lineno]=${CURRENT[lineno]}
+   node[colno]=${CURRENT[colno]}
 }
 
 
 function integer {
    mk_integer
    local -n node=$NODE
-   node=$CURRENT
+   node[value]=${CURRENT[value]}
+   node[offset]=${CURRENT[offset]}
+   node[lineno]=${CURRENT[lineno]}
+   node[colno]=${CURRENT[colno]}
 }
 
 
 function string {
    mk_string
    local -n node=$NODE
-   node=$CURRENT
+   node[value]=${CURRENT[value]}
+   node[offset]=${CURRENT[offset]}
+   node[lineno]=${CURRENT[lineno]}
+   node[colno]=${CURRENT[colno]}
 }
 
 
 function path {
    mk_path
    local -n node=$NODE
-   node=$CURRENT
+   node[value]=${CURRENT[value]}
+   node[offset]=${CURRENT[offset]}
+   node[lineno]=${CURRENT[lineno]}
+   node[colno]=${CURRENT[colno]}
 }
 
 #───────────────────────────────( expressions )─────────────────────────────────
 # Thanks daddy Pratt.
+#
+# Had to do a little bit of tomfoolery with the binding powers. Shifted
+# everything up by 1bp (+2), so the lowest is lbp=3 rbp=4.
 
-#declare -gA prefix_binding_power=(
-#   [NOT]='13'
-#   [BANG]='13'
-#   [MINUS]='13'
-#)
-#
-#declare -gA NUD=(
-#   [NOT]='expr_unary'
-#   [BANG]='expr_unary'
-#   [MINUS]='expr_unary'
-#   [PATH]='expr_path'
-#   [TRUE]='expr_boolean'
-#   [FALSE]='expr_boolean'
-#   [STRING]='expr_string'
-#   [INTEGER]='expr_integer'
-#   [IDENTIFIER]='expr_identifier'
-#   [L_PAREN]='expr_group'
-#)
-#
-#
-#declare -gA LED=(
-#   [OR]='expr_compop'
-#   [AND]='expr_compop'
-#   [EQ]='expr_binary'
-#   [NE]='expr_binary'
-#   [LT]='expr_binary'
-#   [LE]='expr_binary'
-#   [GT]='expr_binary'
-#   [GE]='expr_binary'
-#   [PLUS]='expr_binary'
-#   [MINUS]='expr_binary'
-#   [STAR]='expr_binary'
-#   [SLASH]='expr_binary'
-#   [L_PAREN]='expr_function'
-#)
-#
-#declare -gA infix_binding_power=(
-#   [OR]='3'
-#   [AND]='3'
-#   [EQ]='5'
-#   [NE]='5'
-#   [LT]='7'
-#   [LE]='7'
-#   [GT]='7'
-#   [GE]='7'
-#   [PLUS]='9'
-#   [MINUS]='9'
-#   [STAR]='11'
-#   [SLASH]='11'
-#   [L_PAREN]='13'
-#)
-#
-#
-#function expr {
-#   local -i min_bp=${1:-1}
-#
-#   local -- fn=${nud[${CURRENT[type]}]}
-#   if [[ -z $fn ]] ; then
-#      echo "No NUD defined for ${CURRENT[type]}." 1>&2
-#      exit -1 # TODO: Real escape codes here.
-#   fi
-#
-#   local lhs="$NODE"
-#   advance
-#
-#   while :; do
-#      local -- op=$CURRENT ot=${CURRENT[type]}
-#
-#      local -i  rbp  lbp=${infix_binding_power[ot]:-0}
-#      (( rbp = lbp + 1 )) 
-#
-#      if [[ $rbp -lt $min_bp ]] ; then
-#         break
-#      fi
-#
-#      advance
-#
-#      fn=${led[${CURRENT[type]}]}
-#      $fn  "$lhs"  "$op"  "$rbp"
-#
-#      lhs=$NODE
-#   done
-#
-#   declare -g NODE=$lhs
-#}
-#
-#
-#function expr_group {
-#   parse 
-#   munch 'R_PAREN' "expecting \`)' after group"
-#}
-#
-#function expr_binary {
-#   local -- lhs="$1" op="$2" rbp="$3"
-#
-#   mk_binary
-#   local -- save=$NODE
-#   local -n node=$NODE
-#
-#   expr "$rbp"
-#
-#   node[op]="$op"
-#   node[left]="$lhs"
-#   node[right]="$NODE"
-#
-#   declare -g NODE=$save
-#}
-#
-#
-#function expr_unary {
-#   local -- op="$2" rbp="$3"
-#
-#   mk_binary
-#   local -- save=$NODE
-#   local -n node=$NODE
-#
-#   expr "$rbp"
-#
-#   node[op]="$op"
-#   node[right]="$NODE"
-#
-#   declare -g NODE=$save
-#}
-#
-#
-#function expr_integer {
-#   mk_integer
-#   local -n node=$NODE
-#   node=${CURRENT[value]}
-#}
-#
-#
-#function expr_literal {
-#   mk_boolean
-#   local -n node=$NODE
-#   node=${CURRENT[value]}
-#}
-#
-#
-#function expr_path {
-#   mk_boolean
-#   local -n node=$NODE
-#   node=${CURRENT[value]}
-#}
-#
-#
-#function expr_string {
-#   mk_boolean
-#   local -n node=$NODE
-#   node=${CURRENT[value]}
-#}
-#
-#
-#function expr_identifier {
-#   mk_identifier
-#   local -n node=$NODE
-#   node=${CURRENT[value]}
-#}
+declare -gA prefix_binding_power=(
+   [NOT]='12'
+   [BANG]='12'
+   [MINUS]='12'
+)
+
+declare -gA NUD=(
+   [EOF]='return'
+   [SEMI]='return'
+   # Ugh is this some silly shit. Ensures that we return from expression parsing
+   # if we hit a ';', or an EOF. Don't think this is the best way of doing it,
+   # but there's a certain perverse elegance I guess.
+
+   [NOT]='unary'
+   [BANG]='unary'
+   [MINUS]='unary'
+   [PATH]='path'
+   [TRUE]='boolean'
+   [FALSE]='boolean'
+   [STRING]='string'
+   [INTEGER]='integer'
+   [IDENTIFIER]='identifier'
+   [L_PAREN]='group'
+   [L_BRACKET]='array'
+)
+
+
+declare -gA LED=(
+   [OR]='compop'
+   [AND]='compop'
+   [EQ]='binary'
+   [NE]='binary'
+   [LT]='binary'
+   [LE]='binary'
+   [GT]='binary'
+   [GE]='binary'
+   [PLUS]='binary'
+   [MINUS]='binary'
+   [STAR]='binary'
+   [SLASH]='binary'
+   [L_PAREN]='function'
+)
+
+declare -gA infix_binding_power=(
+   [OR]='3'
+   [AND]='3'
+   [EQ]='5'
+   [NE]='5'
+   [LT]='7'
+   [LE]='7'
+   [GT]='7'
+   [GE]='7'
+   [PLUS]='9'
+   [MINUS]='9'
+   [STAR]='11'
+   [SLASH]='11'
+   [L_PAREN]='13'
+)
+
+
+function expression {
+   local -i min_bp=${1:-1}
+
+   local -- lhs rhs op
+   local -i lbp rbp
+
+   local -- fn=${NUD[${CURRENT[type]}]}
+   if [[ -z $fn ]] ; then
+      echo "No NUD defined for ${CURRENT[type]}." 1>&2
+      exit -1 # TODO: Real escape codes here.
+   fi
+
+   $fn ; lhs=$NODE
+   advance
+
+   while :; do
+      op=$CURRENT ot=${CURRENT[type]}
+
+      # If not unset, or explicitly set to 0, `rbp` remains set through each
+      # pass of the loop. They are local to the function, but while loops do not
+      # have lexical scope. I should've known this. Have done an entire previous
+      # project on the premise of lexical scoping in bash.
+      rbp=0 ; lbp=${infix_binding_power[ot]:-0}
+      (( rbp = (lbp == 0 ? 0 : lbp+1) ))
+
+      if [[ $rbp -lt $min_bp ]] ; then
+         break
+      fi
+
+      advance
+
+      fn=${LED[${CURRENT[type]}]}
+      if [[ -z $fn ]] ; then
+         echo "No LED defined for ${CURRENT[type]}." 1>&2
+         exit -2 # TODO: Real escape codes here.
+      fi
+      $fn  "$lhs"  "$op"  "$rbp"
+
+      lhs=$NODE
+   done
+
+   declare -g NODE=$lhs
+}
+
+
+function group {
+   expression 
+   munch 'R_PAREN' "expecting \`)' after group"
+}
+
+function binary {
+   local -- lhs="$1" op="$2" rbp="$3"
+
+   mk_binary
+   local -- save=$NODE
+   local -n node=$NODE
+
+   expr "$rbp"
+
+   node[op]="$op"
+   node[left]="$lhs"
+   node[right]="$NODE"
+
+   declare -g NODE=$save
+}
+
+
+function unary {
+   local -- op="$2" rbp="$3"
+
+   mk_binary
+   local -- save=$NODE
+   local -n node=$NODE
+
+   expr "$rbp"
+
+   node[op]="$op"
+   node[right]="$NODE"
+
+   declare -g NODE=$save
+}
 
 
 #════════════════════════════════════╡ GO ╞═════════════════════════════════════
