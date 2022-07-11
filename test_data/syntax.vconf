@@ -1,7 +1,0 @@
-global {
-   one [
-      "two"
-      "three"
-      "four"
-   ];
-}
