@@ -3,7 +3,7 @@
 #  2022-07-03 :: Created
 
 PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
-source "${PROGDIR}/errors.sh"
+#source "${PROGDIR}/errors.sh"
 
 declare -a ERRORS=()
 declare -A COMPILE_ERROR=(
@@ -19,7 +19,11 @@ declare -A COMPILE_ERROR=(
 #  INPUT_FILE           # Name of input file
 #  FILE_LINES[]         # INPUT_FILE.readlines()
 source <(
-   bash "${PROGDIR}"/lexer.sh "${1?Requires file input}"
+   source <(
+      bash "${PROGDIR}"/lexer.sh "${1?Requires file input}"
+   )
+
+   source "${PROGDIR}"/parser.sh
 )
 
-source "${PROGDIR}"/parser.sh
+source "${PROGDIR}"/compiler.sh

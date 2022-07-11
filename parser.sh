@@ -55,7 +55,8 @@ COMMENT
 
 
 #═════════════════════════════════╡ AST NODES ╞═════════════════════════════════
-declare -- NODE
+declare -- ROOT  # Solely used to indicate the root of the AST. Imported by the
+declare -- NODE  #+compiler.
 declare -i _NODE_NUM=0
 
 # I'm not entirely sure if I need this yet. Will just be a dictionary mapping
@@ -122,6 +123,8 @@ function mk_array {
 
    local -n node=$nname
    node=()
+
+   TYPEOF[$nname]='array'
 }
 
 
@@ -149,7 +152,7 @@ function mk_typedef {
    node[kind]=          # Primitive type
    node[subtype]=       # Sub `Type' node
 
-   TYPEOF[$nname]='type'
+   TYPEOF[$nname]='typedef'
 }
 
 
@@ -400,8 +403,9 @@ function program {
    name[colno]=0
 
    mk_decl_section
-   local -n node=$NODE
-   local -n items=${node[items]}
+   declare -g ROOT=$NODE
+   local   -n node=$NODE
+   local   -n items=${node[items]}
 
    node[name]=$nname
 
@@ -723,6 +727,7 @@ function unary {
 parse
 
 (
+   declare -p ROOT
    declare -p TYPEOF
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
 ) | sort -V -k3
