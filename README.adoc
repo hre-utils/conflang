@@ -1,6 +1,6 @@
 = conflang
 
-Declarative config file `"language"` with ``assert``-based data validation.
+Declarative config file "`language`" with ``assert``-based data validation.
 
 
 == Syntax
@@ -48,3 +48,5 @@ I hope to resolve some of those problems with:
 == Use
 === Developers
 === End users
+
+// vim:ft=asciidoc:syntax=on
