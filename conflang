@@ -2,7 +2,14 @@
 # changelog
 #  2022-07-03 :: Created
 
-PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
+declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
+declare -g INPUT="$1"
+
+if [[ -z "$INPUT" ]] ; then
+   echo "Requires file input" 1>&2
+   exit -1
+fi
+
 #source "${PROGDIR}/errors.sh"
 
 #declare -a ERRORS=()
@@ -13,18 +20,26 @@ PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
 #   [SYNTAX_ERROR]=${COMPILE_ERROR__SYNTAX_ERROR}
 #)
 
-# Imports:
-#  TOKENS[]             # Array of token names
-#  TOKEN_$n             # Sequence of all token objects
-#  INPUT_FILE           # Name of input file
-#  FILE_LINES[]         # INPUT_FILE.readlines()
+# This toomfoolery is just to isolate all the functions/variables to each
+# respective file. Particularly as the lexer/parser reuse function names like
+#  `advance`, `current`, etc.
+# Only the particular information we *want* to export is.
 source <(
-   source <(
-      bash "${PROGDIR}"/lexer.sh "${1?Requires file input}"
-   )
+   # Imports:
+   #  TOKENS[]             # Array of token names
+   #  TOKEN_$n             # Sequence of all token objects
+   #  INPUT_FILE           # Name of input file
+   #  FILE_LINES[]         # INPUT_FILE.readlines()
+   source <( "${PROGDIR}"/lexer.sh "$INPUT" )
 
+   # Imports:
+   #  ROOT
+   #  TYPEOF{}
+   #  NODE_*
    source "${PROGDIR}"/parser.sh
 )
 
 source "${PROGDIR}"/compiler.sh
 source "${PROGDIR}"/api.sh
+
+#conf global one ; echo "$RV"

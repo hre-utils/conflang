@@ -24,5 +24,3 @@ function conf {
       shift && (( idx++ ))
    done
 }
-
-echo "RV == $RV"
