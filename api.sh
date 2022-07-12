@@ -6,10 +6,11 @@
 # IMPORTS:
 #  _DATA_*
 
-
-declare -- RV=$_DATA_ROOT
+declare -- RV
 
 function conf {
+   declare -g RV=$_DATA_ROOT
+
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
       declare -g RV="${d[$1]}"
@@ -24,5 +25,4 @@ function conf {
    done
 }
 
-conf "global" "foo" 2
 echo "RV == $RV"
