@@ -25,21 +25,29 @@ fi
 #  `advance`, `current`, etc.
 # Only the particular information we *want* to export is.
 source <(
-   # Imports:
+   source <( "${PROGDIR}"/lexer.sh "$INPUT" )
+   # Exports:
    #  TOKENS[]             # Array of token names
    #  TOKEN_$n             # Sequence of all token objects
    #  INPUT_FILE           # Name of input file
    #  FILE_LINES[]         # INPUT_FILE.readlines()
-   source <( "${PROGDIR}"/lexer.sh "$INPUT" )
 
-   # Imports:
+   source "${PROGDIR}"/parser.sh
+   # Exports:
    #  ROOT
    #  TYPEOF{}
    #  NODE_*
-   source "${PROGDIR}"/parser.sh
 )
 
 source "${PROGDIR}"/compiler.sh
-source "${PROGDIR}"/api.sh
+# Exports:
+#  _DATA_ROOT
+#  _DATA_*
 
+source "${PROGDIR}"/api.sh
+# Exports:
+#  RV
+#  conf()
+
+# Example usage:
 #conf global one ; echo "$RV"
