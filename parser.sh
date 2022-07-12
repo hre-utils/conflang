@@ -349,7 +349,7 @@ function raise_parse_error {
    local -- exp=$1
    local -- msg="${2:-Expected something else.}"
 
-   printf "[${t[lineno]}:${t[colno]}] expected($exp) ${msg}\n" 1<&2
+   printf "[${t[lineno]}:${t[colno]}] ${msg}\n" 1<&2
    declare -p $CURRENT_NAME
    exit -1
 }
@@ -420,7 +420,7 @@ function program {
 
 function declaration {
    identifier
-   munch 'IDENTIFIER' "expecting variable declaration: identifier is missing." 1>&2
+   munch 'IDENTIFIER' "expecting variable declaration." 1>&2
 
    if match 'L_BRACE' ; then
       decl_section
@@ -465,13 +465,12 @@ function decl_variable {
       node[type]=$NODE
    fi
 
-   if ! check ';' ; then
+   if ! check 'SEMI' ; then
       expression
       node[expr]=$NODE
-      #munch 'SEMI' "expecting \`;' after variable declaration"
-   #else validate
    fi
 
+   munch 'SEMI' "expecting \`;' after expression." 1>&2
    declare -g NODE=$save
 }
 
@@ -497,6 +496,9 @@ function typedef {
 }
 
 
+# ISN'T VALIDATION JUST A POSTFIX TOKEN?? I'M PRETTY CERTAIN THAT MAKES SENSE.
+# Gonna need to fuck around with it in the Pratt parser. But it's sounding right
+# to my idiot midnight ears.
 function validation {
    munch 'L_BRACE' "expecting \`{' to open validation block. Perhaps you forgot a \`;' closing the last expression?"
 
@@ -581,18 +583,12 @@ function path {
 # everything up by 1bp (+2), so the lowest is lbp=3 rbp=4.
 
 declare -gA prefix_binding_power=(
-   [NOT]='12'
-   [BANG]='12'
-   [MINUS]='12'
+   [NOT]='10'
+   [BANG]='10'
+   [MINUS]='10'
 )
 
 declare -gA NUD=(
-   [EOF]='return'
-   [SEMI]='return'
-   # Ugh is this some silly shit. Ensures that we return from expression parsing
-   # if we hit a ';', or an EOF. Don't think this is the best way of doing it,
-   # but there's a certain perverse elegance I guess.
-
    [NOT]='unary'
    [BANG]='unary'
    [MINUS]='unary'
@@ -647,12 +643,18 @@ function expression {
    local -i lbp rbp
 
    local -- fn=${NUD[${CURRENT[type]}]}
+
    if [[ -z $fn ]] ; then
       echo "No NUD defined for ${CURRENT[type]}." 1>&2
       exit -1 # TODO: Real escape codes here.
    fi
 
    $fn ; lhs=$NODE
+
+   # TODO: Remove this check.
+   # I feel like there has to be a more elegant way of handling a semicolon
+   # ending expressions.
+   check 'SEMI' && return
    advance
 
    while :; do
@@ -697,7 +699,7 @@ function binary {
    local -- save=$NODE
    local -n node=$NODE
 
-   expr "$rbp"
+   expression "$rbp"
 
    node[op]="$op"
    node[left]="$lhs"
@@ -714,7 +716,7 @@ function unary {
    local -- save=$NODE
    local -n node=$NODE
 
-   expr "$rbp"
+   expression "$rbp"
 
    node[op]="$op"
    node[right]="$NODE"

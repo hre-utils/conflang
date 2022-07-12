@@ -10,15 +10,13 @@
 declare -- RV='__DATA_ROOT'
 
 function conf {
-   local -i idx=1
-
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
       declare -g RV="${d[$1]}"
 
       if [[ -z $RV ]] ; then
          # Tracebacks would be A+ here.
-         echo "selector #$idx '$1' not found" 1>&2
+         echo "selector '$1' not found" 1>&2
          exit -1
       fi
 
@@ -40,5 +38,5 @@ declare -a _D3=(
    "two"
 )
 
-conf 0 "tim" "tam"
+conf "global" "two" 1
 echo "RV == $RV"

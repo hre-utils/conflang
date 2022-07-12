@@ -16,39 +16,23 @@
 #     - Collapse tree as much as possible
 #       - Value nodes (string, int, etc.) don't need a node unto themselves, can
 #         be collapsed to the [value]= property of their parent.
+#
+# Everything that's "exported" here (via `declare -p`) will be sourcedby the
+# user. Need to be more cognizant of naming
 
-# TODO;CURRENT:
-# I feel like the blocks of...
-#
-#> declare -g NODE=${node[left]}
-#> _0_debug_${TYPEOF[$NODE]}
-#
-# ...could be replaced by a function:
-#
-#> funtion walk {
-#>    declare -g NODE=$1
-#>    _0_debug_${TYPEOF[$NODE]}
-#> }
-#
-# Pretty straightforward to call then:
-#
-#> function _0_debug_typedef {
-#>    local -- save=$NODE
-#>    local -n node=$save
-#> 
-#>    walk ${node[kind]}
-#> 
-#>    [[ -n ${node[subtype]} ]] && {
-#>       walk ${node[subtype]}
-#>    }
-#> }
+declare -- NODE
 
-declare -- NODE=$ROOT
+declare -- KEY VALUE
+declare -- DATA
+declare -i DATA_NUM=0
+
 
 function walk {
    declare -g NODE=${1?}
-   _0_debug_${TYPEOF[$NODE]}
+   #_0_debug_${TYPEOF[$NODE]}
+   _1_data_${TYPEOF[$NODE]}
 }
+
 
 function _0_debug_decl_section {
    local -- save=$NODE
@@ -152,8 +136,116 @@ function _0_debug_identifier {
    echo "IDENT[${node[value]}]"
 }
 
-_0_debug_decl_section
 
+function mk_dict {
+   (( DATA_NUM++ ))
+   local   --  dname="_DATA_${DATA_NUM}"
+   declare -gA $dname
+   declare -g  DATA=$dname
+   local   -n  data=$dname
+   data=()
+}
+
+
+function mk_array {
+   (( DATA_NUM++ ))
+   local   --  dname="_DATA_${DATA_NUM}"
+   declare -ga $dname
+   declare -g  DATA=$dname
+   local   -n  data=$dname
+   data=()
+}
+
+
+function _1_data_decl_section {
+   # Save reference to current NODE. Restored at the end.
+   local -- save=$NODE
+   local -n node=$save
+
+   # Create data dictionary object.
+   mk_dict
+   local -- dname=$DATA
+   local -n data=$DATA
+
+   walk ${node[name]}
+   declare -g KEY=$VALUE
+
+   declare -n items="${node[items]}" 
+   for nname in "${items[@]}"; do
+      walk $nname
+      data[$KEY]="$DATA"
+   done
+
+   declare -g DATA=$dname
+   declare -g NODE=$save
+}
+
+
+function _1_data_decl_variable {
+   local -- save=$NODE
+   local -n node=$save
+
+   walk ${node[name]}
+   declare -g KEY="$VALUE"
+
+   if [[ -n ${node[expr]} ]] ; then
+      walk ${node[expr]}
+   fi
+
+   declare -g NODE=$save
+}
+
+
+function _1_data_array {
+   local -- save=$NODE
+   local -n node=$save
+
+   mk_array
+   local -- dname=$DATA
+   local -n data=$DATA
+
+   for nname in "${node[@]}"; do
+      walk $nname
+      data+=( "$VALUE" )
+   done
+
+   declare -g DATA=$dname
+   declare -g NODE=$save
+}
+
+
+function _1_data_boolean {
+   local -n node=$NODE
+   declare -g VALUE="${node[value]}"
+}
+
+
+function _1_data_integer {
+   local -n node=$NODE
+   declare -g VALUE="${node[value]}"
+}
+
+
+function _1_data_string {
+   local -n node=$NODE
+   declare -g VALUE="${node[value]}"
+}
+
+
+function _1_data_path {
+   local -n node=$NODE
+   declare -g VALUE="${node[value]}"
+}
+
+
+function _1_data_identifier {
+   local -n node=$NODE
+   declare -g VALUE="${node[value]}"
+}
+
+
+walk $ROOT
+declare -p ${!_DATA_*}
 
 
 
