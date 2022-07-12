@@ -22,8 +22,7 @@
 
 declare -- NODE
 
-declare -- KEY VALUE
-declare -- DATA
+declare -- KEY DATA
 declare -i DATA_NUM=0
 
 
@@ -168,7 +167,7 @@ function _1_data_decl_section {
    local -n data=$DATA
 
    walk ${node[name]}
-   declare -g KEY=$VALUE
+   declare -g KEY=$DATA
 
    declare -n items="${node[items]}" 
    for nname in "${items[@]}"; do
@@ -186,7 +185,7 @@ function _1_data_decl_variable {
    local -n node=$save
 
    walk ${node[name]}
-   declare -g KEY="$VALUE"
+   declare -g KEY="$DATA"
 
    if [[ -n ${node[expr]} ]] ; then
       walk ${node[expr]}
@@ -206,7 +205,7 @@ function _1_data_array {
 
    for nname in "${node[@]}"; do
       walk $nname
-      data+=( "$VALUE" )
+      data+=( "$DATA" )
    done
 
    declare -g DATA=$dname
@@ -216,31 +215,31 @@ function _1_data_array {
 
 function _1_data_boolean {
    local -n node=$NODE
-   declare -g VALUE="${node[value]}"
+   declare -g DATA="${node[value]}"
 }
 
 
 function _1_data_integer {
    local -n node=$NODE
-   declare -g VALUE="${node[value]}"
+   declare -g DATA="${node[value]}"
 }
 
 
 function _1_data_string {
    local -n node=$NODE
-   declare -g VALUE="${node[value]}"
+   declare -g DATA="${node[value]}"
 }
 
 
 function _1_data_path {
    local -n node=$NODE
-   declare -g VALUE="${node[value]}"
+   declare -g DATA="${node[value]}"
 }
 
 
 function _1_data_identifier {
    local -n node=$NODE
-   declare -g VALUE="${node[value]}"
+   declare -g DATA="${node[value]}"
 }
 
 
