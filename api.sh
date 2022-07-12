@@ -5,25 +5,24 @@
 #
 # IMPORTS:
 #  __DATA_*
-#
-# THINKIES:
-# Also a recursive descenty kinda tree traversal here, except hopefully flatten
-# out some of the unnecessary nodes for faster queries.
-#  - Pull out type & validation nodes
-#  - Squash literals directly into their parent's dict
-#
-# For faster access, drop values into a global `RV` variable. Better than having
-# the raw values `echo` themselves. Super slow as you add subshell calls.
-#
-# Thinking of doing something like...
 
-declare -- RV
+
+declare -- RV='__DATA_ROOT'
 
 function conf {
+   local -i idx=1
+
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
       declare -g RV="${d[$1]}"
-      shift
+
+      if [[ -z $RV ]] ; then
+         # Tracebacks would be A+ here.
+         echo "selector #$idx '$1' not found" 1>&2
+         exit -1
+      fi
+
+      shift && (( idx++ ))
    done
 }
 
@@ -41,5 +40,5 @@ declare -a _D3=(
    "two"
 )
 
-conf "global" "two" "0"
+conf 0 "tim" "tam"
 echo "RV == $RV"
