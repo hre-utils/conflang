@@ -21,118 +21,16 @@
 # user. Need to be more cognizant of naming
 
 declare -- NODE
-
 declare -- KEY DATA
+
 declare -i DATA_NUM=0
+declare -- _DATA_ROOT='_DATA_1'
 
 
 function walk {
    declare -g NODE=${1?}
    #_0_debug_${TYPEOF[$NODE]}
    _1_data_${TYPEOF[$NODE]}
-}
-
-
-function _0_debug_decl_section {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk ${node[name]}
-
-   declare -n items="${node[items]}" 
-   for nname in "${items[@]}"; do
-      walk $nname
-   done
-
-   declare -g NODE=$save
-}
-
-
-function _0_debug_decl_variable {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk ${node[name]}
-
-   [[ -n ${node[type]} ]] && walk ${node[type]}
-   [[ -n ${node[expr]} ]] && walk ${node[expr]}
-
-   declare -g NODE=$save
-}
-
-
-function _0_debug_array {
-   local -- save=$NODE
-   local -n node=$save
-
-   for nname in "${node[@]}"; do
-      walk $nname
-   done
-
-   declare -g NODE=$save
-}
-
-
-function _0_debug_typedef {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk ${node[kind]}
-
-   [[ -n ${node[subtype]} ]] && {
-      walk ${node[subtype]}
-   }
-}
-
-
-function _0_debug_binary {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk ${node[left]}
-   walk ${node[right]}
-
-   declare -g NODE=$save
-}
-
-
-function _0_debug_unary {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk ${node[right]}
-
-   declare -g NODE=$save
-}
-
-
-function _0_debug_boolean {
-   local -n node=$NODE
-   echo "BOOL[${node[value]}]"
-}
-
-
-function _0_debug_integer {
-   local -n node=$NODE
-   echo "INT[${node[value]}]"
-}
-
-
-function _0_debug_string {
-   local -n node=$NODE
-   echo "STRING[${node[value]}]"
-}
-
-
-function _0_debug_path {
-   local -n node=$NODE
-   echo "PATH[${node[value]}]"
-}
-
-
-function _0_debug_identifier {
-   local -n node=$NODE
-   echo "IDENT[${node[value]}]"
 }
 
 
@@ -167,7 +65,7 @@ function _1_data_decl_section {
    local -n data=$DATA
 
    walk ${node[name]}
-   declare -g KEY=$DATA
+   local -- key="$DATA"
 
    declare -n items="${node[items]}" 
    for nname in "${items[@]}"; do
@@ -175,8 +73,9 @@ function _1_data_decl_section {
       data[$KEY]="$DATA"
    done
 
-   declare -g DATA=$dname
-   declare -g NODE=$save
+   declare -g KEY="$key"
+   declare -g DATA="$dname"
+   declare -g NODE="$save"
 }
 
 
@@ -185,12 +84,13 @@ function _1_data_decl_variable {
    local -n node=$save
 
    walk ${node[name]}
-   declare -g KEY="$DATA"
+   local -- key="$DATA"
 
    if [[ -n ${node[expr]} ]] ; then
       walk ${node[expr]}
    fi
 
+   declare -g KEY="$key"
    declare -g NODE=$save
 }
 
@@ -244,8 +144,110 @@ function _1_data_identifier {
 
 
 walk $ROOT
-declare -p ${!_DATA_*}
 
+
+
+#function _0_debug_decl_section {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   walk ${node[name]}
+#
+#   declare -n items="${node[items]}" 
+#   for nname in "${items[@]}"; do
+#      walk $nname
+#   done
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function _0_debug_decl_variable {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   walk ${node[name]}
+#
+#   [[ -n ${node[type]} ]] && walk ${node[type]}
+#   [[ -n ${node[expr]} ]] && walk ${node[expr]}
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function _0_debug_array {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   for nname in "${node[@]}"; do
+#      walk $nname
+#   done
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function _0_debug_typedef {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   walk ${node[kind]}
+#
+#   [[ -n ${node[subtype]} ]] && {
+#      walk ${node[subtype]}
+#   }
+#}
+#
+#
+#function _0_debug_binary {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   walk ${node[left]}
+#   walk ${node[right]}
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function _0_debug_unary {
+#   local -- save=$NODE
+#   local -n node=$save
+#
+#   walk ${node[right]}
+#
+#   declare -g NODE=$save
+#}
+#
+#
+#function _0_debug_boolean {
+#   local -n node=$NODE
+#   echo "BOOL[${node[value]}]"
+#}
+#
+#
+#function _0_debug_integer {
+#   local -n node=$NODE
+#   echo "INT[${node[value]}]"
+#}
+#
+#
+#function _0_debug_string {
+#   local -n node=$NODE
+#   echo "STRING[${node[value]}]"
+#}
+#
+#
+#function _0_debug_path {
+#   local -n node=$NODE
+#   echo "PATH[${node[value]}]"
+#}
+#
+#
+#function _0_debug_identifier {
+#   local -n node=$NODE
+#   echo "IDENT[${node[value]}]"
+#}
 
 
 #declare -- SYMBOL

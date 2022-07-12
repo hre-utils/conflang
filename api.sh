@@ -4,10 +4,10 @@
 # by the config file.
 #
 # IMPORTS:
-#  __DATA_*
+#  _DATA_*
 
 
-declare -- RV='__DATA_ROOT'
+declare -- RV=$_DATA_ROOT
 
 function conf {
    while [[ $# -gt 0 ]] ; do
@@ -24,19 +24,5 @@ function conf {
    done
 }
 
-declare -- RV=_D1
-declare -A _D1=(
-   [global]=_D2
-)
-declare -A _D2=(
-   [one]="this"
-   [two]=_D3
-)
-declare -a _D3=(
-   "zero"
-   "one"
-   "two"
-)
-
-conf "global" "two" 1
+conf "global" "foo" 2
 echo "RV == $RV"

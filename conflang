@@ -27,3 +27,4 @@ source <(
 )
 
 source "${PROGDIR}"/compiler.sh
+source "${PROGDIR}"/api.sh
