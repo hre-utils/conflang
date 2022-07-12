@@ -476,9 +476,9 @@ function decl_variable {
 
 
 function typedef {
-   # Store current `identifier' token. Reaching this method is contingent upon
-   # the current token *being* an identifier, so we're safe.
-   identifier ; advance
+   identifier
+   munch 'IDENTIFIER' 'expecting identifier for typedef.'
+
    local -- name=$NODE
 
    mk_typedef

@@ -34,7 +34,7 @@ function walk {
 }
 
 
-function mk_dict {
+function mk_data_dict {
    (( DATA_NUM++ ))
    local   --  dname="_DATA_${DATA_NUM}"
    declare -gA $dname
@@ -44,7 +44,7 @@ function mk_dict {
 }
 
 
-function mk_array {
+function mk_data_array {
    (( DATA_NUM++ ))
    local   --  dname="_DATA_${DATA_NUM}"
    declare -ga $dname
@@ -60,7 +60,7 @@ function _1_data_decl_section {
    local -n node=$save
 
    # Create data dictionary object.
-   mk_dict
+   mk_data_dict
    local -- dname=$DATA
    local -n data=$DATA
 
@@ -99,7 +99,7 @@ function _1_data_array {
    local -- save=$NODE
    local -n node=$save
 
-   mk_array
+   mk_data_array
    local -- dname=$DATA
    local -n data=$DATA
 
