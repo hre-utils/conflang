@@ -45,18 +45,20 @@
 
 declare -- NODE=$ROOT
 
+function walk {
+   declare -g NODE=${1?}
+   _0_debug_${TYPEOF[$NODE]}
+}
+
 function _0_debug_decl_section {
    local -- save=$NODE
    local -n node=$save
 
-   declare -g NODE=${node[name]}
-   _0_debug_identifier
+   walk ${node[name]}
 
    declare -n items="${node[items]}" 
    for nname in "${items[@]}"; do
-      declare -g NODE=$nname
-      local   -- n=$nname
-      _0_debug_${TYPEOF[$nname]}
+      walk $nname
    done
 
    declare -g NODE=$save
@@ -67,18 +69,10 @@ function _0_debug_decl_variable {
    local -- save=$NODE
    local -n node=$save
 
-   declare -g NODE=${node[name]}
-   _0_debug_identifier
+   walk ${node[name]}
 
-   [[ -n ${node[type]} ]] && {
-      declare -g NODE=${node[type]}
-      _0_debug_${TYPEOF[$NODE]}
-   }
-
-   [[ -n ${node[expr]} ]] && {
-      declare -g NODE=${node[expr]}
-      _0_debug_${TYPEOF[$NODE]}
-   }
+   [[ -n ${node[type]} ]] && walk ${node[type]}
+   [[ -n ${node[expr]} ]] && walk ${node[expr]}
 
    declare -g NODE=$save
 }
@@ -89,9 +83,7 @@ function _0_debug_array {
    local -n node=$save
 
    for nname in "${node[@]}"; do
-      declare -g NODE=$nname
-      local   -- n=$nname
-      _0_debug_${TYPEOF[$nname]}
+      walk $nname
    done
 
    declare -g NODE=$save
@@ -102,12 +94,10 @@ function _0_debug_typedef {
    local -- save=$NODE
    local -n node=$save
 
-   declare -g NODE=${node[kind]}
-   _0_debug_identifier
+   walk ${node[kind]}
 
    [[ -n ${node[subtype]} ]] && {
-      declare -g NODE=${node[subtype]}
-      _0_debug_${TYPEOF[$NODE]}
+      walk ${node[subtype]}
    }
 }
 
@@ -116,11 +106,8 @@ function _0_debug_binary {
    local -- save=$NODE
    local -n node=$save
 
-   declare -g NODE=${node[left]}
-   _0_debug_${TYPEOF[$NODE]}
-
-   declare -g NODE=${node[right]}
-   _0_debug_${TYPEOF[$NODE]}
+   walk ${node[left]}
+   walk ${node[right]}
 
    declare -g NODE=$save
 }
@@ -130,8 +117,7 @@ function _0_debug_unary {
    local -- save=$NODE
    local -n node=$save
 
-   declare -g NODE=${node[right]}
-   _0_debug_${TYPEOF[$NODE]}
+   walk ${node[right]}
 
    declare -g NODE=$save
 }
