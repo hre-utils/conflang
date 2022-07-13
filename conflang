@@ -44,6 +44,9 @@ source <(
    #  NODE_*
 )
 
+# TODO: Should probably move this up into a subshell, so the user is not also
+# sourcing all of our functions and global vars from the compiler. Only the API
+# should be inline.
 source "${PROGDIR}"/compiler.sh
 # Exports (USER ACCESSIBLE):
 #  _DATA_ROOT
@@ -55,4 +58,5 @@ source "${PROGDIR}"/api.sh
 #  conf()
 
 # Example usage:
-#conf global one ; echo "$RV"
+#conf 'global' 'one' ; echo "$RV"
+conf 'key' ; echo "${RV@Q}"

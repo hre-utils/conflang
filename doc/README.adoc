@@ -1,4 +1,9 @@
 = conflang
+:toc:                      left
+:toclevels:                3
+:source-highlighter:       pygments
+:pygments-style:           algol_nu
+:pygments-linenums-mode:   table
 
 Declarative config file "`language`" with ``assert``-based data validation.
 
@@ -48,5 +53,11 @@ I hope to resolve some of those problems with:
 == Use
 === Developers
 === End users
+
+== TODO
+
+. [ ] Learn `BATS`, write tests
+  .. This one is honestly pretty essential
+  .. I've wanted to learn BATS for a while now, what a good opportunity
 
 // vim:ft=asciidoc:syntax=on

@@ -1,0 +1,42 @@
+= Notes
+:toc:                      left
+:toclevels:                3
+:source-highlighter:       pygments
+:pygments-style:           algol_nu
+:pygments-linenums-mode:   table
+
+Collections of my thinkies, musings, and stuff to refer back to while working on this.
+
+== Bash tomfoolery
+
+Naturally, any project of mine must contain a fair amount of bash tomfoolery.
+
+=== Set, but empty
+
+There are built-in tests for variables that are empty _or_ unset (`test -z`).
+However none for declared _and_ empty.
+Did some testing to verify how all the parameter expansion for unset/empty vars works:
+
+[source,bash]
+----
+declare set_empty=''
+declare set_value='y'
+ 
+# SET, but EMPTY
+[[ ${set_empty:-_}   ]]  # TRUE
+[[ ${set_empty-_}    ]] 
+[[ ${set_empty:+_}   ]] 
+[[ ${set_empty+_}    ]]  # TRUE
+
+# SET, and HAS VALUE
+[[ ${set_value:-_}   ]]  # TRUE
+[[ ${set_value-_}    ]]  # TRUE
+[[ ${set_value:+_}   ]]  # TRUE
+[[ ${set_value+_}    ]]  # TRUE
+
+# UNSET, and EMPTY
+[[ ${unset_empty:-_} ]]  # TRUE
+[[ ${unset_empty-_}  ]]  # TRUE
+[[ ${unset_empty:+_} ]] 
+[[ ${unset_empty+_}  ]] 
+----
