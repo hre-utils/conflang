@@ -1,11 +1,4 @@
 #!/bin/bash
-#
-# TODO:
-# Global ERROR flag to mark as TRUE, so we can exit if something has failed in
-# one of the redirection subshells. Set up a `trap` at the top of each script
-# to set ERROR on failures. Can bail and not continue the whole compilation
-# chain if something has gone awry.
-
 
 declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
 declare -g LIBDIR="${PROGDIR}/lib"
@@ -44,6 +37,10 @@ source <(
    #  TYPEOF{}
    #  NODE_*
 )
+
+# This isn't spectacular error handling, but it does allow us (for now) to halt
+# execution if the parser hit an error and exploded.
+[[ -z ${!NODE_*} ]] && exit 1
 
 # TODO: Should probably move this up into a subshell, so the user is not also
 # sourcing all of our functions and global vars from the compiler. Only the API
