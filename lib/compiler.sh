@@ -151,54 +151,34 @@ function data_identifier {
 # Everything at that level should match the Type.kind property. Descend into
 # node, set global Type to previous Type.subtype (if exists). Continue semantic
 # analysis.
-#
-#declare -- SYMBOL
-#declare -i SYMBOL_NUM=0
-#
-#declare -- TYPE
-#declare -i TYPE_NUM=0
-#
-#declare -- SYMTAB
-#declare -i SYMTAB_NUM=0
-#
-#declare -a SCOPE=()
-##> class Symtab:
-##     parent : Symtag
-##     keys   : dict[str, Type]
-#
-## This isn't actually used anywhere, it's kinda just self-documentation that
-## these are the types.
-#declare -A BUILT_INS=(
-#   [int]='INTEGER'
-#   [str]='STRING'
-#   [bool]='BOOLEAN'
-#   [path]='PATH'
-#   [array]='ARRAY'
-#)
-#
-#
-#function mk_type {
-#   (( TYPE_NUM++ ))
-#   local   --  tname="TYPE_${TYPE_NUM}"
-#   declare -gA $tname
-#   declare -g  TYPE=$tname
-#   local   --  type=$tname
-#
-#   type[kind]=
-#   type[subtype]=
-#}
-#
-#
-#function mk_symbol {
-#   (( SYMBOL_NUM++ ))
-#   local   --  sname="SYMBOL_${SYMBOL_NUM}"
-#   declare -gA $sname
-#   declare -g  SYMBOL=$sname
-#   local   --  symbol=$sname
-#
-#   symbol[name]=
-#   symbol[type]=
-#}
+ 
+# Pointer to the Type object of the currently selected Node. This will be
+# compared to the $TARGET_TYPE.
+declare -- TYPE
+declare -i TYPE_NUM=0
+
+# Holds the intended target from a typedef. Compared to sub-expression's Types.
+declare -- TARGET_TYPE
+
+declare -A BUILT_INS=(
+   [int]='INTEGER'
+   [str]='STRING'
+   [bool]='BOOLEAN'
+   [path]='PATH'
+   [array]='ARRAY'
+)
+
+
+function mk_type {
+   (( TYPE_NUM++ ))
+   local   --  tname="TYPE_${TYPE_NUM}"
+   declare -gA $tname
+   declare -g  TYPE=$tname
+   local   --  type=$tname
+
+   type[kind]=
+   type[subtype]=
+}
 
 
 function walk_semantics {
@@ -213,7 +193,7 @@ function semantics_decl_section {
 
    declare -n items="${node[items]}" 
    for each in "${items[@]}"; do
-      walk $each
+      walk_semantics $each
    done
 
    declare -g NODE=$save
@@ -224,22 +204,26 @@ function semantics_decl_variable {
    local -- save=$NODE
    local -n node=$save
 
-   walk ${node[name]}
+   # Type declarations cannot be nested. Thus this must be a "top level". Clear
+   # any previously set TARGET_TYPE, and start anew.
+   declare -g TARGET_TYPE=
 
-   [[ -n ${node[type]} ]] && walk ${node[type]}
-   [[ -n ${node[expr]} ]] && walk ${node[expr]}
+   # If there's no type declaration, or expression, there's nothing to do in
+   # this phase.
+   [[ -z ${node[type]} || -z ${node[expr]} ]] && return
 
-   declare -g NODE=$save
-}
+   walk_semantics ${node[type]}
+   local -- target_name=$TARGET_TYPE
+   local -n target=$TARGET_TYPE
 
+   walk_semantics ${node[expr]}
+   local -- expr_type_name=$TYPE
+   local -n expr_type=$TYPE
 
-function semantics_array {
-   local -- save=$NODE
-   local -n node=$save
-
-   for nname in "${node[@]}"; do
-      walk $nname
-   done
+   if [[ "${target[kind]}" != "${expr_type[kind]}" ]] ; then
+      echo "Type Error. Wants(${target[kind]}), got(${expr_type[kind]})" 1>&2
+      exit -1
+   fi
 
    declare -g NODE=$save
 }
@@ -249,11 +233,17 @@ function semantics_typedef {
    local -- save=$NODE
    local -n node=$save
 
-   walk ${node[kind]}
+   walk_semantics ${node[kind]}
+   local -- tname=$TYPE
+   local -n type=$TYPE
 
-   [[ -n ${node[subtype]} ]] && {
-      walk ${node[subtype]}
-   }
+   if [[ -n ${node[subtype]} ]] ; then
+      walk_semantics ${node[subtype]}
+      type[subtype]=$TYPE
+   fi
+
+   declare -g TARGET_TYPE=$tname
+   declare -g NODE=$save
 }
 
 
@@ -264,13 +254,11 @@ function semantics_binary {
    local -n node=$save
    local -n op=${node[op]}
 
-   walk ${node[left]}
+   walk_semantics ${node[left]}
    local -- type_left=$TYPE
 
-   walk ${node[right]}
+   walk_semantics ${node[right]}
    local -- type_right=$TYPE
-
-   # CURRENT
 
    #if [[ ${op[value]} =~ (PLUS|MINUS|STAR|SLASH) ]] ; then
    #fi
@@ -285,41 +273,99 @@ function semantics_unary {
    local -- save=$NODE
    local -n node=$save
 
-   walk ${node[right]}
+   walk_semantics ${node[right]}
 
    declare -g NODE=$save
 }
 
 
+function semantics_array {
+   local -- save=$NODE
+   local -n node=$save
+
+   # Save reference to the type that's expected of us.
+   local -- target_save=$TARGET_TYPE
+   local -n target=$TARGET_TYPE
+
+   # If we're not enforcing some constraints on the subtypes, then don't check
+   # them.
+   [[ -z ${target[subtype]} ]] && return
+
+   declare -g TARGET_TYPE=${target[subtype]}
+   local   -n subtype=${target[subtype]}
+
+   declare -p $TARGET_TYPE
+
+   for nname in "${node[@]}"; do
+      walk_semantics $nname
+      local -- child_name=$TYPE
+      local -n child=$TYPE
+
+      if [[ ${subtype[kind]} != ${child[kind]} ]] ; then
+         echo "Type Error. Wants(${subtype[kind]}), got(${child[kind]})" 1>&2
+         exit -1
+      fi
+   done
+
+   mk_type
+   local -n type=$TYPE
+   type[kind]='ARRAY'
+
+   declare -g TARGET_TYPE=$target_save
+   declare -g NODE=$save
+}
+
+
 function semantics_boolean {
-   local -n node=$NODE
-   # mk_type Boolean
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='BOOLEAN'
 }
 
 
 function semantics_integer {
-   local -n node=$NODE
-   # mk_type Integer
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='INTEGER'
 }
 
 
 function semantics_string {
-   local -n node=$NODE
-   # mk_type String
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='STRING'
 }
 
 
 function semantics_path {
-   local -n node=$NODE
-   # mk_type Path
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='PATH'
 }
 
 
-function semantics_identifier { :; }
+function semantics_identifier {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+
+   local -n node=$NODE
+   local -- kind=${BUILT_INS[${node[value]}]}
+   if [[ -z $kind ]] ; then
+      echo "Invalid type \`${node[value]}\`" 1>&2
+      exit -1
+   fi
+
+   type[kind]=$kind
+}
 # pass.
 # No semantics to be checked here. Identifiers can only occur as names to
 # elements, or function calls.
 
 #──────────────────────────────────( engage )───────────────────────────────────
 walk_data $ROOT
-#walk_semantics $ROOT
+walk_semantics $ROOT

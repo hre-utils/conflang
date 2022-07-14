@@ -57,4 +57,4 @@ source "${LIBDIR}"/api.sh
 
 # Example usage:
 #conf 'global' 'one' ; echo "$RV"
-conf 'key' ; echo "${RV@Q}"
+#conf 'key' ; echo "${RV@Q}"
