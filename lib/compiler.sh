@@ -19,6 +19,11 @@
 #
 # Everything that's "exported" here (via `declare -p`) will be sourced by the
 # user. Need to be more cognizant of naming. Can't have vars get stomped.
+#
+# Symbol table?
+# I think we're going to realistically need some sort of a symbol table, but
+# only so we can do semantic analysis for function calls in the validation
+# section. It may also hold `self` as a reference to the current expression.
 
 declare -- NODE
 
