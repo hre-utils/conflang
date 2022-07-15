@@ -166,6 +166,15 @@ function scan {
          string $CURRENT ; continue
       fi
 
+      # Numbers.
+      if [[ $CURRENT =~ [[:digit:]] ]] ; then
+         # Bash only natively handles integers. It's not able to do floats
+         # without bringing `bc` or something. For now, that's all we'll also
+         # support. Maybe later I'll add a float type, just so I can write some
+         # external functions that support float comparisons.
+         number ; continue
+      fi
+
       # Paths.
       # If someone has named directories like a hapless fucking child, we must
       # account for paths with spaces in them. Can either:
@@ -252,6 +261,17 @@ function string {
 
    # Skip final closing ('|").
    advance
+}
+
+
+function number {
+   local number=''
+
+   while [[ $PEEK =~ [[:digit:]] ]] ; do
+      advance ; number+="$CURRENT"
+   done
+
+   Token 'INTEGER'
 }
 
 
