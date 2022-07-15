@@ -82,7 +82,11 @@
 # name. But how do we enter these into the symbol table, or make the idents
 # not stomp on each other?
 
-
+# Hmmmmmmmmmmmmmmm. I think the below approach is starting out pretty good, but
+# ultimately is going to work. The user will need access to mk_value. I think
+# we need to make much, much more user-friendly functions. May not hurt to start
+# drafting out what the FFI actually looks like, rather than the internal
+# nonsense for it.
 
 declare -- ARITY  RETURN         # Temporary pointers in loop.
 declare -- FN                    # Globally declared functions.
