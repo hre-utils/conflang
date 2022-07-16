@@ -89,17 +89,13 @@ function len {
 #  - Prior to any function call, we need to
 #    - For each argument on the stack, make namerefs to their type and value.
 
-arity=2
-declare -a STACK=( 'one' 'two' 'three' 'four' )
-
 (( last  = ${#STACK[@]} ))
 (( start = last - arity ))
-# This works if we're non-inclusive of the upper bound.
 
 for (( idx = start; idx < last; idx++ )) ; do
    local -- arg_name="${STACK[idx]}"
    local -n arg="$arg_name"
 
    declare -gn "ARG${idx}_TYPE"="${arg[type]}"
-   declare -gn "ARG${idx}_VALUE"="${arg[value]}"
+   declare -gn "ARG${idx}_DATA"="${arg[data]}"
 done

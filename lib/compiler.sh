@@ -371,6 +371,167 @@ function semantics_identifier {
 # No semantics to be checked here. Identifiers can only occur as names to
 # elements, or function calls.
 
+#───────────────────────────────( compilation )─────────────────────────────────
+# Generating values & opcodes, to be executed by the VM.
+
+decalre -i VALUE_NUM
+declare -- VALUE_NAME
+declare -n VALUE=$VALUE_NAME
+
+function mk_type {
+   (( VALUE_NUM++ ))
+   local --  vname="VALUE_${VALUE_NUM}"
+
+   declare -gA $vname
+   declare -g  VALUE_NAME=$tname
+   declare -gn VALUE=$tname
+
+   local -- value=$vname
+   value[type]=
+   value[data]=
+}
+
+
+declare -i OP_NUM
+declare -- OP_NAME
+declare -n OP=$OP_NAME
+
+function mk_op {
+   (( OP_NUM++ ))
+   local --  oname="OP_${OP_NUM}"
+
+   declare -gA $oname
+   declare -gA OP_NAME=$oname
+   declare -gn OP=$oname
+
+   local -- op=$oname
+   op=()
+}
+
+
+function walk_compile {
+   declare -g NODE="$1"
+   compile_${TYPEOF[$NODE]}
+}
+
+
+function compile_decl_section {
+   local -- save=$NODE
+   local -n node=$save
+
+   declare -n items="${node[items]}" 
+   for each in "${items[@]}"; do
+      walk_compile $each
+   done
+
+   declare -g NODE=$save
+}
+
+
+function compile_decl_variable {
+   local -- save=$NODE
+   local -n node=$save
+
+   walk ${node[expr]}
+
+   declare -g NODE=$save
+}
+
+
+# Pass, nothing to do.
+function compile_typedef { :; }
+
+
+function compile_binary {
+   local -- save=$NODE
+   local -n node=$save
+   local -n op=${node[op]}
+
+   walk_compile ${node[left]}
+   local -- type_left=$TYPE
+
+   walk_compile ${node[right]}
+   local -- type_right=$TYPE
+
+   #if [[ ${op[value]} =~ (PLUS|MINUS|STAR|SLASH) ]] ; then
+   #fi
+
+   declare -g NODE=$save
+}
+
+
+# This can only occur within a validation section. Validation expressions must
+# return a boolean.
+function compile_unary {
+   local -- save=$NODE
+   local -n node=$save
+
+   walk_compile ${node[right]}
+
+   declare -g NODE=$save
+}
+
+
+function compile_array {
+   local -- save=$NODE
+   local -n node=$save
+
+   # I don't actually think you need to compile shit here, per se.
+   #for nname in "${node[@]}"; do
+   #   walk_compile $nname
+   #done
+
+   declare -g NODE=$save
+}
+
+
+function compile_boolean {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='BOOLEAN'
+}
+
+
+function compile_integer {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='INTEGER'
+}
+
+
+function compile_string {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='STRING'
+}
+
+
+function compile_path {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+   type[kind]='PATH'
+}
+
+
+function compile_identifier {
+   mk_type
+   local -- tname=$TYPE
+   local -n type=$TYPE
+
+   local -n node=$NODE
+   local -- kind=${BUILT_INS[${node[value]}]}
+   if [[ -z $kind ]] ; then
+      echo "Invalid type \`${node[value]}\`" 1>&2
+      exit -1
+   fi
+
+   type[kind]=$kind
+}
+
 #──────────────────────────────────( engage )───────────────────────────────────
 walk_data $ROOT
 walk_semantics $ROOT

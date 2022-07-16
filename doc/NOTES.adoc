@@ -40,3 +40,42 @@ declare set_value='y'
 [[ ${unset_empty:+_} ]] 
 [[ ${unset_empty+_}  ]] 
 ----
+
+
+== Properties vs. asserts
+
+I think I've been low-key struggling to justify the "`assert`" piece of the syntax.
+I know I wanted something to say "`this value should have some required information`".
+Perhaps that was mistakenly ``assert``s, rather than '`properties`'.
+Each type has a set of valid properties (obviously user-extensible) that are enforced at runtime.
+
+[source]
+----
+dirs  array:path  [
+   ~/Desktop
+   ~/Documents
+   ~/Pictures/
+] {
+   create       : true;          # For directories, `mkdir -p` for each element
+   can('read')  : true;          # Has +r
+   can('write') : false;         # Has +x
+   elements     : 3;
+}
+----
+
+'`Properties`' as a concept I think is much more apt for describing the role they play.
+
+
+== Casting
+
+There is currently no casting.
+This is a problem if we want to type a directory as a string, to avoid escaping spaces with backslash.
+
+
+== Subtypes
+
+Would be nice to have subtypes for paths.
+`path:file`, `path:directory`, etc.
+
+The typecheck can say it's not a directory, because it doesn't end in a trailing slash.
+But the runtime validation will check if the file itself actually is a directory.
