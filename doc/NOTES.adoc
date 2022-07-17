@@ -56,7 +56,7 @@ dirs  array:path  [
    ~/Documents
    ~/Pictures/
 ] {
-   create       : true;          # For directories, `mkdir -p` for each element
+   create       : true;
    can('read')  : true;
    can('write') : false;
    elements     : 3;
@@ -83,6 +83,29 @@ Are these also tests?
 Should `can('read')` do a `$ chmod +r` if it doesn't already have it?
 Or should it fail if not readable.
 
+Upon rubber duckying with Ginny, I realized that they're not really properties...
+They're '`tests`', or '`directives`'.
+The same key may have different meanings, depending on it's test/directive context.
+
+.Example context
+|===
+| Keyword | Test | Directive
+
+| readable
+| File/directory can be read by the current user
+| Make the file readable by the current user (`chmod +r`)
+
+| exists
+| File/directory exists
+| Create (`touch`, `mkdir -p`) if not exists
+|===
+
+Tests should fail on a non-0 status.
+Perhaps a config option for "exit on test failure", else continue running and report errors at the end.
+
+But how to have a concise syntax to determine which is which?
+Ooh, maybe they can become tests if they end with a `?`, else they're a directive.
+
 
 == Casting
 
@@ -97,3 +120,65 @@ Would be nice to have subtypes for paths.
 
 The typecheck can say it's not a directory, because it doesn't end in a trailing slash.
 But the runtime validation will check if the file itself actually is a directory.
+
+
+== Failing in subshells
+
+If something exits with a non-zero status from a subshell, gotta make sure the rest of the execution does not continue.
+Can set a `EXIT=0` before the subshell.
+Within the sourced `.sh` file, the final line is `SUCCESS=true ; declare -p SUCCESS`.
+The parent shell does a `test $SUCCESS == 'true' || exit 1`.
+
+
+== Basic grammar
+
+----
+program        -> declaration EOF
+
+declaration    -> section_decl
+                | variable_decl
+
+section_decl   -> identifier '{' declaration* '}'
+
+variable_decl  -> identifier (type)? (expression)? ';'
+
+expression     -> array
+                | string
+                | integer
+                | boolean
+                | path
+
+array          -> '[' expression* ']'
+----
+
+
+== Basic syntax
+
+[source,conf]
+----
+untyped {
+   key1  "value1";
+   key2  "value2";
+}
+
+
+typed {
+   key1  str  "value1";
+   key2  array:str  [
+      "one"
+      "two"
+      "three"
+   ];
+}
+
+
+context {
+   directories  array:path  [
+      ~/Documents
+      ~/Desktop
+   ] {
+      readable    # directive:  must be readable, `chmod +r`
+      writable?   # test:       is writable? fail if not.
+   }
+}
+----
