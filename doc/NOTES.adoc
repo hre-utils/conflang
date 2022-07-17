@@ -88,8 +88,9 @@ They're '`tests`', or '`directives`'.
 The same key may have different meanings, depending on it's test/directive context.
 
 .Example context
+[cols='1,3,3']
 |===
-| Keyword | Test | Directive
+| Keyword | Test context | Directive context
 
 | readable
 | File/directory can be read by the current user
@@ -118,7 +119,7 @@ This is a problem if we want to type a directory as a string, to avoid escaping 
 Would be nice to have subtypes for paths.
 `path:file`, `path:directory`, etc.
 
-The typecheck can say it's not a directory, because it doesn't end in a trailing slash.
+The typecheck an say it's not a directory, because it doesn't end in a trailing slash.
 But the runtime validation will check if the file itself actually is a directory.
 
 
