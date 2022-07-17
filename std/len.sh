@@ -89,6 +89,9 @@ function len {
 #  - Prior to any function call, we need to
 #    - For each argument on the stack, make namerefs to their type and value.
 
+# Unset any args/refs from the last function call.
+[[ ${!ARG*} ]] && unset ${!ARG*}
+
 (( last  = ${#STACK[@]} ))
 (( start = last - arity ))
 

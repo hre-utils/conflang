@@ -134,6 +134,7 @@ function scan {
          '}')  Token    'R_BRACE' "$CURRENT"  && continue ;;
          '[')  Token  'L_BRACKET' "$CURRENT"  && continue ;;
          ']')  Token  'R_BRACKET' "$CURRENT"  && continue ;;
+         '?')  TOKEN   'QUESTION' "$CURRENT"  && continue ;;
       esac
 
       if [[ $CURRENT == '<' ]] ; then

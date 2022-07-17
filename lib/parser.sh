@@ -34,23 +34,31 @@ GRAMMAR.
 
    decl_section   -> identifier '{' declaration* '}'
 
-   decl_variable  -> identifier [type] [expression] [';' | validation]
+   decl_variable  -> identifier [type] [expression] [context_block] ';'
 
    type           -> identifier (':' identifier)*
 
-   validation     -> '{' expr_list '}'
+   # Right now the only kind of expressions there are... are constants. Leaving
+   # room open for that to change in the future.
+   expression     -> constant
 
-   expr_list      -> expression (';' expression)*
-
-   expression     -> array
-                   | literal
-
-   array          -> '[' expr_list ']'
-
-   literal        -> string
+   constant       -> array
+                   | string
                    | integer
                    | path
                    | boolean
+
+   array          -> '[' expression* ']'
+
+   context_block  -> '{' context* '}'
+
+   context        -> test
+                   | directive
+
+   test           -> identifier '?'
+
+   directive      -> identifier
+
 COMMENT
 
 
@@ -109,9 +117,48 @@ function mk_decl_variable {
    node[name]=       # identifier
    node[type]=       # type
    node[expr]=       # section, array, int, str, bool, path
-   #node[validation]=
+   node[context]=
    
    TYPEOF[$nname]='decl_variable'
+}
+
+
+function mk_context_block {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -ga $nname
+   declare -g  NODE=$nname
+
+   local -n node=$nname
+   node=()
+
+   TYPEOF[$nname]='context_block'
+}
+
+
+function mk_context_test {
+   (( _NODE_NUM++ ))
+   local   -- nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   node[name]=
+
+   TYPEOF[$nname]='context_test'
+}
+
+
+function mk_context_directive {
+   (( _NODE_NUM++ ))
+   local   -- nname="NODE_${_NODE_NUM}"
+   declare -gA $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+
+   node[name]=
+
+   TYPEOF[$nname]='context_directive'
 }
 
 
@@ -156,7 +203,7 @@ function mk_typedef {
 }
 
 
-function mk_function {
+function mk_func_call {
    ## psdudo.
    #> class Function:
    #>    name   : identifier = None
@@ -181,23 +228,23 @@ function mk_function {
    node[params]=$nname_params
 
    # 4) Meta information, for easier parsing.
-   TYPEOF[$nname]='function'
+   TYPEOF[$nname]='func_call'
 }
 
 
-function mk_binary {
-   (( _NODE_NUM++ ))
-   local   --  nname="NODE_${_NODE_NUM}"
-   declare -ga $nname
-   declare -g  NODE=$nname
-   local   -n  node=$nname
-
-   node[op]=
-   node[left]=
-   node[right]=
-
-   TYPEOF[$nname]='binary'
-}
+#function mk_binary {
+#   (( _NODE_NUM++ ))
+#   local   --  nname="NODE_${_NODE_NUM}"
+#   declare -ga $nname
+#   declare -g  NODE=$nname
+#   local   -n  node=$nname
+#
+#   node[op]=
+#   node[left]=
+#   node[right]=
+#
+#   TYPEOF[$nname]='binary'
+#}
 
 
 function mk_unary {
@@ -457,20 +504,31 @@ function decl_variable {
    mk_decl_variable
    local -- save=$NODE
    local -n node=$NODE
-
    node[name]=$name
 
+   # Typedefs.
    if check 'IDENTIFIER' ; then
       typedef
       node[type]=$NODE
    fi
 
-   if ! check 'SEMI' ; then
+   # Expressions.
+   if ! check 'L_BRACE' ; then
       expression
       node[expr]=$NODE
    fi
 
-   munch 'SEMI' "expecting \`;' after expression." 1>&2
+   # Context blocks.
+   if match 'L_BRACE' ; then
+      context_block
+      node[context]=$NODE
+   fi
+
+   munch 'SEMI' "expecting \`;' after declaration." 1>&2
+   # TODO: Error messaging.
+   # Maybe something like "unexpected ${type,,} here -^, a variable declaration
+   # should look like ...".
+
    declare -g NODE=$save
 }
 
@@ -496,17 +554,38 @@ function typedef {
 }
 
 
-# ISN'T VALIDATION JUST A POSTFIX TOKEN?? I'M PRETTY CERTAIN THAT MAKES SENSE.
-# Gonna need to fuck around with it in the Pratt parser. But it's sounding right
-# to my idiot midnight ears.
-function validation {
-   munch 'L_BRACE' "expecting \`{' to open validation block. Perhaps you forgot a \`;' closing the last expression?"
+# THINKIES: I believe a context block can potentially be a postfix expression.
+# Though for now, as it only takes single directives, and not expressions or
+# function calls, it lives here.
+function context_block {
+   mk_context_block
+   local -- save=$NODE
+   local -n node=$NODE
 
    while ! check 'R_BRACE' ; do
-      expr
+      context
+      node+=( $NODE )
    done
 
-   munch 'R_BRACE' "expecting \`}' after validation block."
+   munch 'R_BRACE' "expecting \`}' after context block."
+   declare -g NODE=$save
+}
+
+
+function context {
+   identifier
+   munch 'IDENTIFIER' 'expecting identifier in context block.'
+
+   local -- ident=$NODE
+
+   if check 'QUESTION' ; then
+      mk_context_test
+   else
+      mk_context_directive
+   fi
+
+   local -n node=$NODE
+   node[name]=$ident
 }
 
 
@@ -583,11 +662,10 @@ function path {
 # everything up by 1bp (+2), so the lowest is lbp=3 rbp=4.
 
 declare -gA prefix_binding_power=(
-   [NOT]='10'
-   [BANG]='10'
-   [MINUS]='10'
+   [NOT]=10
+   [BANG]=10
+   [MINUS]=10
 )
-
 declare -gA NUD=(
    [NOT]='unary'
    [BANG]='unary'
@@ -603,38 +681,46 @@ declare -gA NUD=(
 )
 
 
+declare -gA infix_binding_power=(
+   [OR]=3
+   [AND]=3
+   #[EQ]=5
+   #[NE]=5
+   #[LT]=7
+   #[LE]=7
+   #[GT]=7
+   #[GE]=7
+   #[PLUS]=9
+   #[MINUS]=9
+   #[STAR]=11
+   #[SLASH]=11
+   [L_PAREN]=13
+)
 declare -gA LED=(
    [OR]='compop'
    [AND]='compop'
-   [EQ]='binary'
-   [NE]='binary'
-   [LT]='binary'
-   [LE]='binary'
-   [GT]='binary'
-   [GE]='binary'
-   [PLUS]='binary'
-   [MINUS]='binary'
-   [STAR]='binary'
-   [SLASH]='binary'
-   [L_PAREN]='function'
+   #[EQ]='binary'
+   #[NE]='binary'
+   #[LT]='binary'
+   #[LE]='binary'
+   #[GT]='binary'
+   #[GE]='binary'
+   #[PLUS]='binary'
+   #[MINUS]='binary'
+   #[STAR]='binary'
+   #[SLASH]='binary'
+   [L_PAREN]='func_call'
 )
 
-declare -gA infix_binding_power=(
-   [OR]='3'
-   [AND]='3'
-   [EQ]='5'
-   [NE]='5'
-   [LT]='7'
-   [LE]='7'
-   [GT]='7'
-   [GE]='7'
-   [PLUS]='9'
-   [MINUS]='9'
-   [STAR]='11'
-   [SLASH]='11'
-   [L_PAREN]='13'
-)
 
+#declare -gA postfix_binding_power=(
+#   [L_BRACE]=3
+#   [QUESTION]=15
+#)
+#declare -gA RED=(
+#   [L_BRACE]='context_block'
+#   [QUESTION]='context_test'
+#)
 
 function expression {
    local -i min_bp=${1:-1}
@@ -651,7 +737,7 @@ function expression {
 
    $fn ; lhs=$NODE
 
-   # TODO: Remove this check.
+   # THINKIES:
    # I feel like there has to be a more elegant way of handling a semicolon
    # ending expressions.
    check 'SEMI' && return
@@ -689,7 +775,7 @@ function expression {
 
 function group {
    expression 
-   munch 'R_PAREN' "expecting \`)' after group"
+   munch 'R_PAREN' "expecting \`)' after group."
 }
 
 function binary {

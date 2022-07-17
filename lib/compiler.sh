@@ -102,6 +102,10 @@ function data_decl_variable {
 }
 
 
+# TODO: This is necessary currently for negative numbers.
+#function data_unary { :; }
+
+
 function data_array {
    local -- save=$NODE
    local -n node=$save
@@ -252,24 +256,20 @@ function semantics_typedef {
 }
 
 
-# This can only occur within a validation section. Validation expressions must
-# return a boolean.
-function semantics_binary {
-   local -- save=$NODE
-   local -n node=$save
-   local -n op=${node[op]}
-
-   walk_semantics ${node[left]}
-   local -- type_left=$TYPE
-
-   walk_semantics ${node[right]}
-   local -- type_right=$TYPE
-
-   #if [[ ${op[value]} =~ (PLUS|MINUS|STAR|SLASH) ]] ; then
-   #fi
-
-   declare -g NODE=$save
-}
+# NYI
+#function semantics_binary {
+#   local -- save=$NODE
+#   local -n node=$save
+#   local -n op=${node[op]}
+#
+#   walk_semantics ${node[left]}
+#   local -- type_left=$TYPE
+#
+#   walk_semantics ${node[right]}
+#   local -- type_right=$TYPE
+#
+#   declare -g NODE=$save
+#}
 
 
 # This can only occur within a validation section. Validation expressions must
@@ -374,11 +374,11 @@ function semantics_identifier {
 #───────────────────────────────( compilation )─────────────────────────────────
 # Generating values & opcodes, to be executed by the VM.
 
-decalre -i VALUE_NUM
+declare -i VALUE_NUM
 declare -- VALUE_NAME
-declare -n VALUE=$VALUE_NAME
+declare -- VALUE
 
-function mk_type {
+function mk_value {
    (( VALUE_NUM++ ))
    local --  vname="VALUE_${VALUE_NUM}"
 
@@ -394,7 +394,7 @@ function mk_type {
 
 declare -i OP_NUM
 declare -- OP_NAME
-declare -n OP=$OP_NAME
+declare -- OP
 
 function mk_op {
    (( OP_NUM++ ))
@@ -442,22 +442,19 @@ function compile_decl_variable {
 function compile_typedef { :; }
 
 
-function compile_binary {
-   local -- save=$NODE
-   local -n node=$save
-   local -n op=${node[op]}
-
-   walk_compile ${node[left]}
-   local -- type_left=$TYPE
-
-   walk_compile ${node[right]}
-   local -- type_right=$TYPE
-
-   #if [[ ${op[value]} =~ (PLUS|MINUS|STAR|SLASH) ]] ; then
-   #fi
-
-   declare -g NODE=$save
-}
+#function compile_binary {
+#   local -- save=$NODE
+#   local -n node=$save
+#   local -n op=${node[op]}
+#
+#   walk_compile ${node[left]}
+#   local -- type_left=$TYPE
+#
+#   walk_compile ${node[right]}
+#   local -- type_right=$TYPE
+#
+#   declare -g NODE=$save
+#}
 
 
 # This can only occur within a validation section. Validation expressions must
@@ -531,6 +528,10 @@ function compile_identifier {
 
    type[kind]=$kind
 }
+
+
+# TODO: Add func_calls in context blocks.
+function compile_func_call { :; }
 
 #──────────────────────────────────( engage )───────────────────────────────────
 walk_data $ROOT
