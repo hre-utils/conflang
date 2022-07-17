@@ -57,13 +57,31 @@ dirs  array:path  [
    ~/Pictures/
 ] {
    create       : true;          # For directories, `mkdir -p` for each element
-   can('read')  : true;          # Has +r
-   can('write') : false;         # Has +x
+   can('read')  : true;
+   can('write') : false;
    elements     : 3;
 }
 ----
 
 '`Properties`' as a concept I think is much more apt for describing the role they play.
+
+It is the next day, and I am thinking about this further.
+Isn't `create : true` the same thing as just saying `create`?
+We can probably assume a truthy value.
+
+I was thinking maybe there wasn't too much of a practical difference to an `assert` rather than a '`property`'.
+Upon further thinkies I believe there definitely is.
+Asserts can only say that there shouldn't be more than 10 items in a list, or a path should _already_ exist.
+It cannot say to create a path that does _not_ exist.
+Nor to make something writeable if it currently is not.
+
+Need to think through the syntax a little more.
+Right now it's sorta both a function call, and a key:value pair.
+Most of the values are worthless if it's just a true/false.
+
+Are these also tests?
+Should `can('read')` do a `$ chmod +r` if it doesn't already have it?
+Or should it fail if not readable.
 
 
 == Casting
