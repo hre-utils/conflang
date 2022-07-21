@@ -4,30 +4,12 @@
 #  ROOT
 #  TYPEOF{}
 #  NODE_*
-#---
-#
-# THINKIES:
-# This is going to end up pretty complicated. Going to have to...
-#  1. Generate symbol table
-#  2. Typecheck
-#  3. Generate validation IR
-#  4. Generate stripped down tree for programmer's queries
-#     - Move meta-information from nodes to a separate dict
-#     - Collapse tree as much as possible
-#       - Value nodes (string, int, etc.) don't need a node unto themselves, can
-#         be collapsed to the [value]= property of their parent.
-#
-# Everything that's "exported" here (via `declare -p`) will be sourced by the
-# user. Need to be more cognizant of naming. Can't have vars get stomped.
-#
-# Symbol table?
-# I think we're going to realistically need some sort of a symbol table, but
-# only so we can do semantic analysis for function calls in the validation
-# section. It may also hold `self` as a reference to the current expression.
+
 
 declare -- NODE
 
 #────────────────────────────────( build data )─────────────────────────────────
+# TODO: documentation
 declare -- KEY DATA
 
 declare -i DATA_NUM=0
@@ -52,9 +34,9 @@ function mk_data_array {
    data=()
 }
 
+
 function walk_data {
    declare -g NODE="$1"
-   #semantics_${TYPEOF[$NODE]}
    data_${TYPEOF[$NODE]}
 }
 
@@ -230,6 +212,7 @@ function semantics_decl_variable {
    local -n expr_type=$TYPE
 
    if [[ "${target[kind]}" != "${expr_type[kind]}" ]] ; then
+      #raise 'type_error' "${target[kind]}" "${expr_type[kind]}"
       echo "Type Error. Wants(${target[kind]}), got(${expr_type[kind]})" 1>&2
       exit -1
    fi
@@ -256,32 +239,16 @@ function semantics_typedef {
 }
 
 
-# NYI
-#function semantics_binary {
+# This can only occur within a validation section. Validation expressions must
+# return a boolean.
+#function semantics_unary {
 #   local -- save=$NODE
 #   local -n node=$save
-#   local -n op=${node[op]}
-#
-#   walk_semantics ${node[left]}
-#   local -- type_left=$TYPE
 #
 #   walk_semantics ${node[right]}
-#   local -- type_right=$TYPE
 #
 #   declare -g NODE=$save
 #}
-
-
-# This can only occur within a validation section. Validation expressions must
-# return a boolean.
-function semantics_unary {
-   local -- save=$NODE
-   local -n node=$save
-
-   walk_semantics ${node[right]}
-
-   declare -g NODE=$save
-}
 
 
 function semantics_array {
@@ -307,6 +274,7 @@ function semantics_array {
       local -n child=$TYPE
 
       if [[ ${subtype[kind]} != ${child[kind]} ]] ; then
+         #raise 'type_error' "${subtype[kind]}" "${child[kind]}"
          echo "Type Error. Wants(${subtype[kind]}), got(${child[kind]})" 1>&2
          exit -1
       fi
@@ -386,7 +354,7 @@ function mk_value {
    declare -g  VALUE_NAME=$tname
    declare -gn VALUE=$tname
 
-   local -- value=$vname
+   local -n value=$vname
    value[type]=
    value[data]=
 }
@@ -404,7 +372,7 @@ function mk_op {
    declare -gA OP_NAME=$oname
    declare -gn OP=$oname
 
-   local -- op=$oname
+   local -n op=$oname
    op=()
 }
 
@@ -530,8 +498,7 @@ function compile_identifier {
 }
 
 
-# TODO: Add func_calls in context blocks.
-function compile_func_call { :; }
+#function compile_func_call { :; }
 
 #──────────────────────────────────( engage )───────────────────────────────────
 walk_data $ROOT

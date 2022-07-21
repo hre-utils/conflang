@@ -7,17 +7,6 @@
 #  FILE_LINES[]         # INPUT_FILE.readlines()
 # }
 #
-#---
-# TODO:
-#  [ ] Tracebacks!
-#      - What a good opportunity for me to work on that bash traceback nonsense
-#        I was trying to figure out a while ago.
-#  [x] I hate how `munch()` works right now
-#  [x] OOPS I forgot booleans
-#      - Just going to use true/false, not yaml's yes/no/1/0 nonsense
-#
-#---
-
 
 :<<'COMMENT'
 CURRENT.
@@ -377,16 +366,11 @@ function advance {
 }
 
 
-# TODO:
-# Error recovery. We have pretty solid places from which we can "recover" to if
-# an `ERROR' token is encountered. The end of any list or block is a pretty easy
-# candidate.
 function raise_syntax_error {
    local -- tname=${1:-$CURRENT_NAME}
    local -n t=$tname
 
    printf "[${t[lineno]}:${t[colno]}] There was an error.\n" 1<&2
-   # TODO: use the proper, defined error code for syntax errors.
    exit -1
 }
 
@@ -433,7 +417,6 @@ function parse {
 
 #═════════════════════════════╡ GRAMMAR FUNCTIONS ╞═════════════════════════════
 function program {
-   # TODO:
    # This is preeeeeeeeeeeeetty janky. I don't love it. Since this pseudo-
    # section doesn't actually exist in-code, it doesn't have any opening or
    # closing braces. So `section()` gets fucked up when trying to munch a
@@ -524,10 +507,8 @@ function decl_variable {
       node[context]=$NODE
    fi
 
+   # TODO: error reporting
    munch 'SEMI' "expecting \`;' after declaration." 1>&2
-   # TODO: Error messaging.
-   # Maybe something like "unexpected ${type,,} here -^, a variable declaration
-   # should look like ...".
 
    declare -g NODE=$save
 }
@@ -555,7 +536,7 @@ function typedef {
 
 
 # THINKIES: I believe a context block can potentially be a postfix expression.
-# Though for now, as it only takes single directives, and not expressions or
+# Though for now, as it only takes single directives and not expressions or
 # function calls, it lives here.
 function context_block {
    mk_context_block
@@ -717,7 +698,7 @@ declare -gA LED=(
 #   [L_BRACE]=3
 #   [QUESTION]=15
 #)
-#declare -gA RED=(
+#declare -gA RID=(
 #   [L_BRACE]='context_block'
 #   [QUESTION]='context_test'
 #)
@@ -732,7 +713,7 @@ function expression {
 
    if [[ -z $fn ]] ; then
       echo "No NUD defined for ${CURRENT[type]}." 1>&2
-      exit -1 # TODO: Real escape codes here.
+      exit -1 # TODO: issue#6
    fi
 
    $fn ; lhs=$NODE

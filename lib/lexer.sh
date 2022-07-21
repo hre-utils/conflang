@@ -126,6 +126,7 @@ function scan {
       # Symbols.
       case $CURRENT in
          ';')  Token       'SEMI' "$CURRENT"  && continue ;;
+         '-')  TOKEN      'MINUS' "$CURRENT"  && continue ;;
          ',')  Token      'COMMA' "$CURRENT"  && continue ;;
          ':')  Token      'COLON' "$CURRENT"  && continue ;;
          '(')  Token    'L_PAREN' "$CURRENT"  && continue ;;
