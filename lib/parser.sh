@@ -521,12 +521,14 @@ function parser_directive {
 
 function include {
    mk_include
+   local -- save=$NODE
    local -n include=$NODE
    
    path
    munch 'PATH' "expecting path after %include." 1>&2
 
    include=$NODE
+   declare -g NODE=$save
 }
 
 
