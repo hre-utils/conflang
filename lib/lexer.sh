@@ -26,11 +26,13 @@ declare -A FREEZE CURSOR=(
 
 
 declare -A KEYWORD=(
-   [true]='TRUE'
-   [false]='FALSE'
-   [and]='AND'
-   [or]='OR'
-   [not]='NOT'
+   [true]=true
+   [false]=true
+   [and]=true
+   [or]=true
+   [not]=true
+   [include]=true
+   [constrain]=true
 )
 
 
@@ -125,17 +127,21 @@ function scan {
 
       # Symbols.
       case $CURRENT in
-         ';')  Token       'SEMI' "$CURRENT"  && continue ;;
-         '-')  TOKEN      'MINUS' "$CURRENT"  && continue ;;
-         ',')  Token      'COMMA' "$CURRENT"  && continue ;;
-         ':')  Token      'COLON' "$CURRENT"  && continue ;;
-         '(')  Token    'L_PAREN' "$CURRENT"  && continue ;;
-         ')')  Token    'R_PAREN' "$CURRENT"  && continue ;;
-         '{')  Token    'L_BRACE' "$CURRENT"  && continue ;;
-         '}')  Token    'R_BRACE' "$CURRENT"  && continue ;;
-         '[')  Token  'L_BRACKET' "$CURRENT"  && continue ;;
-         ']')  Token  'R_BRACKET' "$CURRENT"  && continue ;;
-         '?')  TOKEN   'QUESTION' "$CURRENT"  && continue ;;
+         ';')  Token       'SEMI' "$CURRENT"  ; continue ;;
+         ':')  Token      'COLON' "$CURRENT"  ; continue ;;
+         ',')  Token      'COMMA' "$CURRENT"  ; continue ;;
+         '-')  Token      'MINUS' "$CURRENT"  ; continue ;;
+         '%')  Token    'PERCENT' "$CURRENT"  ; continue ;;
+         '?')  Token   'QUESTION' "$CURRENT"  ; continue ;;
+
+         '(')  Token    'L_PAREN' "$CURRENT"  ; continue ;;
+         ')')  Token    'R_PAREN' "$CURRENT"  ; continue ;;
+
+         '{')  Token    'L_BRACE' "$CURRENT"  ; continue ;;
+         '}')  Token    'R_BRACE' "$CURRENT"  ; continue ;;
+
+         '[')  Token  'L_BRACKET' "$CURRENT"  ; continue ;;
+         ']')  Token  'R_BRACKET' "$CURRENT"  ; continue ;;
       esac
 
       if [[ $CURRENT == '<' ]] ; then
@@ -227,9 +233,8 @@ function identifier {
       advance ; buffer+="$CURRENT"
    done
 
-   kw="${KEYWORD[$buffer]}" 
-   if [[ -n $kw ]] ; then
-      Token "$kw" "$buffer"
+   if [[ -n ${KEYWORD[$buffer]} ]] ; then
+      Token "${buffer^^}" "$buffer"
    else
       Token 'IDENTIFIER' "$buffer"
    fi

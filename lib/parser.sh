@@ -18,8 +18,18 @@ CURRENT.
 GRAMMAR.
    program        -> decl EOF
 
+   statement      -> declaration
+                   | parser_directive
+
+   parser_dir     -> include
+                   | extend
+
    declaration    -> decl_sec
                    | decl_var
+
+   include        -> "%include" IDENTIFIER ';'
+
+   extend         -> "%extend" array ';'
 
    decl_section   -> identifier '{' declaration* '}'
 
@@ -109,6 +119,29 @@ function mk_decl_variable {
    node[context]=
    
    TYPEOF[$nname]='decl_variable'
+}
+
+
+function mk_include {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -g $nname
+   declare -g NODE=$nname
+   local   -n  node=$nname
+
+   TYPEOF[$nname]='include'
+}
+
+
+function mk_constrain {
+   (( _NODE_NUM++ ))
+   local   --  nname="NODE_${_NODE_NUM}"
+   declare -ga $nname
+   declare -g  NODE=$nname
+   local   -n  node=$nname
+   node=()
+
+   TYPEOF[$nname]='constrain'
 }
 
 
@@ -356,6 +389,7 @@ function advance {
       fi
 
       if [[ ${CURRENT[type]} == 'ERROR' ]] ; then
+         declare -p $CURRENT_NAME 1>&2
          raise_syntax_error
       else
          break
@@ -370,6 +404,7 @@ function raise_syntax_error {
    local -- tname=${1:-$CURRENT_NAME}
    local -n t=$tname
 
+   declare -p $CURRENT_NAME
    printf "[${t[lineno]}:${t[colno]}] There was an error.\n" 1<&2
    exit -1
 }
@@ -380,8 +415,8 @@ function raise_parse_error {
    local -- exp=$1
    local -- msg="${2:-Expected something else.}"
 
-   printf "[${t[lineno]}:${t[colno]}] ${msg}\n" 1<&2
    declare -p $CURRENT_NAME
+   printf "[${t[lineno]}:${t[colno]}] ${msg}\n" 1<&2
    exit -1
 }
 
@@ -440,11 +475,20 @@ function program {
    node[name]=$nname
 
    while ! check 'EOF' ; do
-      declaration
+      statement
       items+=( $NODE )
    done
 
    munch 'EOF'
+}
+
+
+function statement {
+   if match 'PERCENT' ; then
+      parser_directive
+   else
+      declaration
+   fi
 }
 
 
@@ -457,6 +501,48 @@ function declaration {
    else
       decl_variable
    fi
+}
+
+
+function parser_directive {
+   if match 'INCLUDE' ; then
+      include
+   elif match 'CONSTRAIN' ; then
+      constrain
+   else
+      # TODO: error reporting
+      echo "${CURRENT[value]} is not a parser directive." 1>&2
+      exit -1
+   fi
+
+   munch 'SEMI' "expecting \`;' after parser directive." 1>&2
+}
+
+
+function include {
+   mk_include
+   local -n include=$NODE
+   
+   path
+   munch 'PATH' "expecting path after %include." 1>&2
+
+   include=$NODE
+}
+
+
+function constrain {
+   mk_constrain
+   local -- save=$NODE
+   local -n constrain=$NODE
+
+   while ! check 'R_BRACKET' ; do
+      path
+      munch 'PATH' "expecting an array of paths."
+      constrain+=( $NODE )
+   done
+
+   munch 'R_BRACKET' "expecting \`]' after constrain block."
+   declare -g NODE=$save
 }
 
 

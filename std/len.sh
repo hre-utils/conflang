@@ -102,3 +102,62 @@ for (( idx = start; idx < last; idx++ )) ; do
    declare -gn "ARG${idx}_TYPE"="${arg[type]}"
    declare -gn "ARG${idx}_DATA"="${arg[data]}"
 done
+
+
+# 2022-07-17
+# Need to rethink the above, now that I'm not doing an assert-y expression-
+# based kinda validation. Given the new more accurate descriptor of `tests' and 
+# `directives', it's a little easier to write these functions.
+#  1. All statements must be constrained to a single function
+#  2. The function may not call itself, or other functions aside from those
+#     provided by the conflang API (TRUE, FALSE, FAILED)
+#  3. Functions may take string arguments passed from the user, e.g.,
+#     ```
+#     homedir  path:file  {
+#        has_attr('r')
+#     }
+#     ```
+#  4. When a function is called, the top value is popped from the stack,
+#     and made available as a nameref to its ARG_TYPE, and ARG_VALUE. Though
+#     complex types the user may need to do some shenanigans to access
+#     everything (e.g., array of arrays).
+
+function exists_test {
+   if [[ ${ARG_TYPE[kind]} != 'path' ]] ; then
+      raise 'type_error' 'test(exists) expects a type(path).'
+   fi
+
+   if [[ -e "${ARG_VALUE[data]}" ]] ; then
+      TRUE
+   else
+      FALSE
+   fi
+}
+
+
+function exists_directive {
+   if [[ ${ARG_TYPE[kind]} != 'path' ]] ; then
+      raise 'type_error' 'test(exists) expects a type(path).'
+   fi
+
+   local cmd
+   local path="${ARG_VALUE[data]}"
+
+   if [[ ${ARG_TYPE[subtype]} ]] ; then
+      local -n subtype=${ARG_TYPE[subtype]}
+      if [[ ${subtype[kind]} == 'FILE' ]] ; then
+         cmd='touch'
+      else
+         cmd='mkdir -p'
+      fi
+   else
+      if [[ ${path##*/} == '' ]] ; then
+         cmd='mkdir -p'
+      else
+         cmd='touch'
+      fi
+   fi
+
+   $cmd "$path"
+   [[ $? -ne 0 ]] && FAILED
+}

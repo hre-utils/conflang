@@ -183,3 +183,22 @@ context {
    }
 }
 ----
+
+
+== What do I work on now?
+
+For when I get stuck, what are things I can work on...
+
+.Core features that *do* work
+* Lexing, parsing, and compiling basic (non-directive) .config files
+* Support for basic type checking
+* Accessing variables from .config file
+
+.Core features that *do not* yet work
+* Importing/including/extending to other .config files
+* Directive/test contexts
+* Error handling
+* Error reporting
+* Type casting
+* Referencing bash environment variables
+* Referencing interal variables?
