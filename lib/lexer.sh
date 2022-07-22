@@ -10,7 +10,7 @@
 #set -e
 
 #══════════════════════════════════╡ GLOBALS ╞══════════════════════════════════
-INPUT_FILE="${1:-/dev/stdin}"
+INPUT_FILE="$1"
 
 declare -a TOKENS=()
 declare -i _TOKEN_NUM=0
@@ -169,9 +169,14 @@ function scan {
          identifier ; continue
       fi
 
-      # Strings.
-      if [[ $CURRENT =~ [\'\"] ]] ; then
-         string $CURRENT ; continue
+      # Strings. Surrounded by `"`.
+      if [[ $CURRENT == '"' ]] ; then
+         string ; continue
+      fi
+
+      # Paths. Surrounded by `'`.
+      if [[ $CURRENT == "'" ]] ; then
+         path ; continue
       fi
 
       # Numbers.
@@ -181,30 +186,6 @@ function scan {
          # support. Maybe later I'll add a float type, just so I can write some
          # external functions that support float comparisons.
          number ; continue
-      fi
-
-      # Paths.
-      # If someone has named directories like a hapless fucking child, we must
-      # account for paths with spaces in them. Can either:
-      #  1. Require spaces are escaped with backslashes
-      #  2. Allow strings, and coerce to a path depending on type
-      #
-      # Could resolve the `~/' and `./' paths at this stage. We have the path to
-      # the source file. Can just send a $(dirname $INPUT_FILE) for relative
-      # paths, and expand `~' to $HOME. Though that should probably be handled
-      # by the compiler when actually creating the path Type.
-      if [[ $CURRENT == '/' ]] ; then
-         advance
-         path '/'
-         continue
-      elif [[ $CURRENT == '~' && $PEEK == '/' ]] ; then
-         advance ; advance
-         path '~/'
-         continue
-      elif [[ $CURRENT == '.' && $PEEK == '/' ]] ; then
-         advance ; advance
-         path './'
-         continue
       fi
 
       # Can do a dedicated error pass, scanning for error tokens, and assembling
@@ -242,13 +223,10 @@ function identifier {
 
 
 function string {
-   # Supports both '/" characters to indicate strings, and intermediate '/"
-   # characters can be escaped with a backslash.
-   delim="$1"
    declare -a buffer=()
 
    while [[ -n $CURRENT ]] ; do
-      if [[ $PEEK == $delim ]] ; then
+      if [[ $PEEK == '"' ]] ; then
          if [[ $CURRENT == '\' ]] ; then
             unset buffer[-1]
          else
@@ -266,7 +244,34 @@ function string {
    # Create token.
    Token 'STRING' "$join"
 
-   # Skip final closing ('|").
+   # Skip final closing `'`.
+   advance
+}
+
+
+function path {
+   declare -a buffer=()
+
+   while [[ -n $CURRENT ]] ; do
+      if [[ $PEEK == "'" ]] ; then
+         if [[ $CURRENT == '\' ]] ; then
+            unset buffer[-1]
+         else
+            break
+         fi
+      fi
+      advance ; buffer+=( "$CURRENT" )
+   done
+
+   local join=''
+   for c in "${buffer[@]}" ; do
+      join+="$c"
+   done
+
+   # Create token.
+   Token 'PATH' "$join"
+
+   # Skip final closing `'`.
    advance
 }
 
@@ -279,42 +284,6 @@ function number {
    done
 
    Token 'INTEGER'
-}
-
-
-function path {
-   local prefix="$1"
-   local -a buffer=( $prefix )
-
-   while [[ -n $CURRENT ]] ; do
-      if [[ $CURRENT =~ [[:space:]] ]] ; then
-         if [[ ${buffer[-1]} == '\' ]] ; then
-            unset buffer[-1]
-         else
-            break
-         fi
-      fi
-
-      buffer+=( "$CURRENT" )
-
-      # Our only "rules" for paths are:
-      #  1. They may not contain unescaped spaces
-      #  2. They may not contain semicolons
-      # Though both may be mitigated by using a string, then casting to a path.
-      if [[ $PEEK == ';' ]] ; then
-         break
-      fi
-
-      advance
-   done
-
-   local join=''
-   for c in "${buffer[@]}" ; do
-      join+="$c"
-   done
-
-   # Create token.
-   Token 'PATH' "$join"
 }
 
 

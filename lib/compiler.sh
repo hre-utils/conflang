@@ -266,8 +266,6 @@ function semantics_array {
    declare -g TARGET_TYPE=${target[subtype]}
    local   -n subtype=${target[subtype]}
 
-   declare -p $TARGET_TYPE
-
    for nname in "${node[@]}"; do
       walk_semantics $nname
       local -- child_name=$TYPE

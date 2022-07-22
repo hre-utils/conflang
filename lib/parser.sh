@@ -351,7 +351,7 @@ function mk_path {
    node[lineno]=
    node[colno]=
 
-   TYPEOF[$nname]='identifier'
+   TYPEOF[$nname]='path'
 }
 
 
@@ -794,6 +794,7 @@ declare -gA LED=(
 #   [L_BRACE]='context_block'
 #   [QUESTION]='context_test'
 #)
+
 
 function expression {
    local -i min_bp=${1:-1}

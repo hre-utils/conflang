@@ -31,7 +31,7 @@ source <(
    #  INPUT_FILE           # Name of input file
    #  FILE_LINES[]         # INPUT_FILE.readlines()
 
-   source "${LIBDIR}"/parser.sh
+   source "${LIBDIR}"/parser.sh >&2 && exit
    # Exports:
    #  ROOT
    #  TYPEOF{}
