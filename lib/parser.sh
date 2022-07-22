@@ -66,6 +66,13 @@ declare -- ROOT  # Solely used to indicate the root of the AST. Imported by the
 declare -- NODE  #+compiler.
 declare -i _NODE_NUM=0
 
+# `include` & `constrain` directives are handled by the parser. They don't
+# actually create any "real" nodes. They leave sentinel values that are later
+# resolved.
+declare -- INCLUDE         CONSTRAIN
+declare -A INCLUDES=()     CONSTRAINTS=()
+declare -i INCLUDE_NUM=0   CONSTRAIN_NUM=0
+
 # I'm not entirely sure if I need this yet. Will just be a dictionary mapping
 # the internal name of a node to its type. E.g,
 #> typeof=(
@@ -123,25 +130,22 @@ function mk_decl_variable {
 
 
 function mk_include {
-   (( _NODE_NUM++ ))
-   local   --  nname="NODE_${_NODE_NUM}"
-   declare -g $nname
-   declare -g NODE=$nname
-   local   -n  node=$nname
+   (( INCLUDE_NUM++ ))
+   local   -- iname="INCLUDE_${INCLUDE_NUM}"
+   declare -g $iname
 
-   TYPEOF[$nname]='include'
+   INCLUDES+=( $iname )
+   declare -g INCLUDE=$iname
 }
 
 
 function mk_constrain {
-   (( _NODE_NUM++ ))
-   local   --  nname="NODE_${_NODE_NUM}"
-   declare -ga $nname
-   declare -g  NODE=$nname
-   local   -n  node=$nname
-   node=()
+   (( CONSTRAIN_NUM++ ))
+   local   -- cname="CONSTRAIN_${CONSTRAIN_NUM}"
+   declare -g $cname
 
-   TYPEOF[$nname]='constrain'
+   CONSTRAINTS+=( $cname )
+   declare -g CONSTRAIN=$cname
 }
 
 

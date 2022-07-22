@@ -56,12 +56,6 @@ function data_decl_section {
 
    local -n items="${node[items]}" 
    for nname in "${items[@]}"; do
-      # Sections contain declarations and parser directives. Parser directives
-      # don't need to go into the data output.
-      if [[ ${TYPEOF[$nname]} =~ (include|constrain) ]] ; then
-         continue
-      fi
-
       walk_data $nname
       data[$KEY]="$DATA"
    done
@@ -190,11 +184,6 @@ function semantics_decl_section {
 
    declare -n items="${node[items]}" 
    for each in "${items[@]}"; do
-      # Skip parser directives in semantic analysis. Nothing to actually check.
-      if [[ ${TYPEOF[$each]} =~ (include|constrain) ]] ; then
-         continue
-      fi
-
       walk_semantics $each
    done
 
