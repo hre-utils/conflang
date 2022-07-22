@@ -1,15 +1,5 @@
 #!/bin/bash
-#
-# NOTES:
-# I've opted to putting globally declared variables under each section to which
-# they principally belong. Example CHARRAY (array of characters from the input
-# file) and FILE_LINES (each line of the source file) are declared under the
-# `SCANNER' section. The exception are vars used throughout the entire file,
-# such as the TOKENS array.
 
-#set -e
-
-#══════════════════════════════════╡ GLOBALS ╞══════════════════════════════════
 INPUT_FILE="$1"
 
 declare -a TOKENS=()

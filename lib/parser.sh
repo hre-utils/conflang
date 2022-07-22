@@ -4,61 +4,10 @@
 #  TOKENS[]             # Array of token names
 #  TOKEN_$n             # Sequence of all token objects
 #  FILE_LINES[]         # INPUT_FILE.readlines()
+#  _FILES[]             # Array of imported files
+#  _FILE                # Index of current file
 # }
 #
-
-:<<'COMMENT'
-CURRENT.
-   Seemingly getting an offset for variable declaration nodes. Haven't spent the
-   time to figure out which values are wrong, and what the right ones should be,
-   but it's definitely jumbly as shit.
-
-
-GRAMMAR.
-   program        -> decl EOF
-
-   statement      -> declaration
-                   | parser_directive
-
-   parser_dir     -> include
-                   | extend
-
-   declaration    -> decl_sec
-                   | decl_var
-
-   include        -> "%include" IDENTIFIER ';'
-
-   extend         -> "%extend" array ';'
-
-   decl_section   -> identifier '{' declaration* '}'
-
-   decl_variable  -> identifier [type] [expression] [context_block] ';'
-
-   type           -> identifier (':' identifier)*
-
-   # Right now the only kind of expressions there are... are constants. Leaving
-   # room open for that to change in the future.
-   expression     -> constant
-
-   constant       -> array
-                   | string
-                   | integer
-                   | path
-                   | boolean
-
-   array          -> '[' expression* ']'
-
-   context_block  -> '{' context* '}'
-
-   context        -> test
-                   | directive
-
-   test           -> identifier '?'
-
-   directive      -> identifier
-
-COMMENT
-
 
 #═════════════════════════════════╡ AST NODES ╞═════════════════════════════════
 declare -- ROOT  # Solely used to indicate the root of the AST. Imported by the
@@ -72,19 +21,7 @@ declare -- INCLUDE         CONSTRAIN
 declare -A INCLUDES=()     CONSTRAINTS=()
 declare -i INCLUDE_NUM=0   CONSTRAIN_NUM=0
 
-# I'm not entirely sure if I need this yet. Will just be a dictionary mapping
-# the internal name of a node to its type. E.g,
-#> typeof=(
-#>    [NODE_1]='string'
-#>    [NODE_2]='dict'
-#>    [NODE_3]='identifier'
-#>    [NODE_4]='type'
-#> )
-#
-# Would save me from having to use a `get_type' function using `declare -p` to
-# haphazardly determine from basic types. Though maybe that's actually all we
-# need in this case. Going to have to just start banging on it and see what
-# happens.
+# Saves us from a get_type() function call, or some equivalent.
 declare -A TYPEOF=()
 
 
