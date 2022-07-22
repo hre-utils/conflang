@@ -3,7 +3,6 @@
 # from ./lexer.sh import {
 #  TOKENS[]             # Array of token names
 #  TOKEN_$n             # Sequence of all token objects
-#  INPUT_FILE           # Name of input file
 #  FILE_LINES[]         # INPUT_FILE.readlines()
 # }
 #
@@ -299,6 +298,7 @@ function mk_boolean {
    node[offset]=
    node[lineno]=
    node[colno]=
+   node[file]=
 
    TYPEOF[$nname]='boolean'
 }
@@ -316,6 +316,7 @@ function mk_integer {
    node[offset]=
    node[lineno]=
    node[colno]=
+   node[file]=
 
    TYPEOF[$nname]='integer'
 }
@@ -333,6 +334,7 @@ function mk_string {
    node[offset]=
    node[lineno]=
    node[colno]=
+   node[file]=
 
    TYPEOF[$nname]='string'
 }
@@ -350,6 +352,7 @@ function mk_path {
    node[offset]=
    node[lineno]=
    node[colno]=
+   node[file]=
 
    TYPEOF[$nname]='path'
 }
@@ -367,6 +370,7 @@ function mk_identifier {
    node[offset]=
    node[lineno]=
    node[colno]=
+   node[file]=
 
    TYPEOF[$nname]='identifier'
 }
@@ -470,6 +474,7 @@ function program {
    name[offset]=0
    name[lineno]=0
    name[colno]=0
+   name[file]="${_FILE}"
 
    mk_decl_section
    declare -g ROOT=$NODE
@@ -498,7 +503,7 @@ function statement {
 
 function declaration {
    identifier
-   munch 'IDENTIFIER' "expecting variable declaration." 1>&2
+   munch 'IDENTIFIER' "expecting variable declaration."
 
    if match 'L_BRACE' ; then
       decl_section
@@ -519,7 +524,7 @@ function parser_directive {
       exit -1
    fi
 
-   munch 'SEMI' "expecting \`;' after parser directive." 1>&2
+   munch 'SEMI' "expecting \`;' after parser directive."
 }
 
 
@@ -529,7 +534,7 @@ function include {
    local -n include=$NODE
    
    path
-   munch 'PATH' "expecting path after %include." 1>&2
+   munch 'PATH' "expecting path after %include."
 
    include=$NODE
    declare -g NODE=$save
@@ -567,7 +572,7 @@ function decl_section {
       items+=( $NODE )
    done
 
-   munch 'R_BRACE' "expecting \`}' after section." 1>&2
+   munch 'R_BRACE' "expecting \`}' after section."
    declare -g NODE=$save
 }
 
@@ -600,7 +605,7 @@ function decl_variable {
    fi
 
    # TODO: error reporting
-   munch 'SEMI' "expecting \`;' after declaration." 1>&2
+   munch 'SEMI' "expecting \`;' after declaration."
 
    declare -g NODE=$save
 }
@@ -686,6 +691,7 @@ function identifier {
    node[offset]=${CURRENT[offset]}
    node[lineno]=${CURRENT[lineno]}
    node[colno]=${CURRENT[colno]}
+   node[file]=${CURRENT[file]}
 }
 
 
@@ -696,6 +702,7 @@ function boolean {
    node[offset]=${CURRENT[offset]}
    node[lineno]=${CURRENT[lineno]}
    node[colno]=${CURRENT[colno]}
+   node[file]=${CURRENT[file]}
 }
 
 
@@ -706,6 +713,7 @@ function integer {
    node[offset]=${CURRENT[offset]}
    node[lineno]=${CURRENT[lineno]}
    node[colno]=${CURRENT[colno]}
+   node[file]=${CURRENT[file]}
 }
 
 
@@ -716,6 +724,7 @@ function string {
    node[offset]=${CURRENT[offset]}
    node[lineno]=${CURRENT[lineno]}
    node[colno]=${CURRENT[colno]}
+   node[file]=${CURRENT[file]}
 }
 
 
@@ -726,6 +735,7 @@ function path {
    node[offset]=${CURRENT[offset]}
    node[lineno]=${CURRENT[lineno]}
    node[colno]=${CURRENT[colno]}
+   node[file]=${CURRENT[file]}
 }
 
 #───────────────────────────────( expressions )─────────────────────────────────
@@ -889,7 +899,7 @@ function unary {
 parse
 
 (
-   declare -p ROOT
-   declare -p TYPEOF
+   declare -p TYPEOF  ROOT
+   declare -p _FILES  _FILE
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
 ) | sort -V -k3

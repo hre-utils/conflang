@@ -9,28 +9,29 @@ if [[ -z "$INPUT" ]] ; then
    exit -1
 fi
 
-#source "${PROGDIR}/errors.sh"
-
-#declare -a ERRORS=()
-#declare -A COMPILE_ERROR=(
-#   # All errors are defined in the ./errors.sh file. Easier to define them in a
-#   # single place, both for lookup, and ensuring the same exit status isn't used
-#   # twice.
-#   [SYNTAX_ERROR]=${COMPILE_ERROR__SYNTAX_ERROR}
-#)
+# Shouldn't code file names/paths into the generated output. If the user has the
+# same file *data*, but it's in a different place, we shouldn't have to
+# re-compile the output.
+# An array of files allows us to map a static file INDEX (stored in the output
+# data), to the possibly dynamic path to the file.
+declare -ga _FILES=( "$INPUT" )
+declare -gi _FILE=0
+# This -----^ stores the index of the file we're currently looking at. We can
+# get the path to the current file with ${_FILES[_FILE]}.
 
 # This toomfoolery is just to isolate all the functions/variables to each
 # respective file. Particularly as the lexer/parser reuse function names like
 #  `advance`, `current`, etc.
 # Only the particular information we *want* to export is.
 source <(
-   source <( "${LIBDIR}"/lexer.sh "$INPUT" )
+   source <( source "${LIBDIR}"/lexer.sh "$INPUT" )
    # Exports:
    #  TOKENS[]             # Array of token names
    #  TOKEN_$n             # Sequence of all token objects
    #  INPUT_FILE           # Name of input file
    #  FILE_LINES[]         # INPUT_FILE.readlines()
 
+   #source "${LIBDIR}"/parser.sh
    source "${LIBDIR}"/parser.sh >&2 && exit
    # Exports:
    #  ROOT

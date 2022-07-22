@@ -56,6 +56,7 @@ function Token {
    t[offset]=${FREEZE[offset]}
    t[lineno]=${FREEZE[lineno]}
    t[colno]=${FREEZE[colno]}
+   t[file]="${_FILE}"
 
    TOKENS+=( "$tname" ) ; (( _TOKEN_NUM++ ))
    #echo "[${t[lineno]}:${t[colno]}] ${type} [${value}]"
@@ -293,6 +294,6 @@ scan
 # parser. This helps not polute too much the global namespace. Able to just
 # import that which we need.
 (
-   declare -p INPUT_FILE  FILE_LINES
+   declare -p FILE_LINES  _FILES  _FILE
    declare -p TOKENS  ${!TOKEN_*}
 ) | sort -V -k3
