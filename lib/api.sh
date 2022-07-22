@@ -14,10 +14,12 @@ function conf {
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
 
+      echo "$RV[$1] == ${d[$1]}"
+
       # If variable IS UNSET. Will not trigger if variable is SET but EMPTY.
-      if [[ "${d[$1]-_}" ]] ; then
+      if [[ ! "${d[$1]+_}" ]] ; then
          # Tracebacks would be A+ here.
-         echo "selector '$1' not found" 1>&2
+         echo "selector '$1' not found ${d[$1]-_}" 1>&2
          exit -1
       fi
 

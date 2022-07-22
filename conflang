@@ -31,8 +31,8 @@ source <(
    #  INPUT_FILE           # Name of input file
    #  FILE_LINES[]         # INPUT_FILE.readlines()
 
-   #source "${LIBDIR}"/parser.sh
-   source "${LIBDIR}"/parser.sh >&2 && exit
+   source "${LIBDIR}"/parser.sh
+   #source "${LIBDIR}"/parser.sh >&2 && exit
    # Exports:
    #  ROOT
    #  TYPEOF{}
@@ -57,5 +57,6 @@ source "${LIBDIR}"/api.sh
 #  conf()
 
 # Example usage:
-#conf 'global' 'one' ; echo "$RV"
 #conf 'key' ; echo "${RV@Q}"
+declare -p ${!_DATA_*}
+conf 'global' 'name' ; echo "$RV"
