@@ -14,8 +14,6 @@ function conf {
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
 
-      echo "$RV[$1] == ${d[$1]}"
-
       # If variable IS UNSET. Will not trigger if variable is SET but EMPTY.
       if [[ ! "${d[$1]+_}" ]] ; then
          # Tracebacks would be A+ here.

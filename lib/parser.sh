@@ -8,22 +8,90 @@
 #  _FILE                # Index of current file
 # }
 #
+#
+# THINKIES:
+# The global variables need to not reset themselves when called again by
+# constrained/imported functions. Maybe just wrap them in a:
+#> [[ $_FILE -eq 0 ]]
+#
+# This will require scanning/parsing the included files. Probably easiests by
+# wrapping the current `source <( source <( ... ))` w/ {lexer,parser}.sh into
+# a function.
+#
+#> function pre_compile {
+#>    source <(
+#>       source <( source lexer.sh "$1" )
+#>    )
+#>    source parser.sh
+#> }
+#>
+#> 
+#> pre_compile
+#> declare -- _root=$ROOT
+#>
+#> for parent_node_name in ${!INCLUDES[@]} ; do
+#>    declare -n parent_node=$parent_node_name
+#>    declare -n parent_items=${parent_node[items]}
+#>
+#>    declare -- path=${INCLUDES[$parent_node_name]
+#>    for f in "${_FILES[@]}" ; do
+#>       [[ "$path" == "$f" ]] && raise 'circular_dependency'
+#>    done
+#>
+#>    _FILES+=( $path )
+#>    _FILE=${#_FILES[@]}
+#>
+#>    pre_compile "$path"
+#>    declare -- child_node_name=$ROOT
+#>    declare -n child_node=$ROOT
+#>
+#>    declare -n items=${child_node[items]}
+#>    for node in "${items[@]}" ; do
+#>       parent_items+=( $node )
+#>    done
+#> done
+#>
+#> ROOT=$_root
+#
+#
+# Turns out the above won't work. Even if you `declare -g` a variable, when
+# dumping it with `declare -p`, it loses the global flag. Would need to regex
+# every declaration to become global upon importing into the function.
+
+# As I think more about it, there's no reason the user needs to source this file
+# itself. Just the resulting data nodes, and the ./api.sh. Their program would
+# begin something like:
+#
+#> conflang "config.cfg" > ./compiled.sh
+#> source ./compiled.sh
+#> source api.sh
 
 #═════════════════════════════════╡ AST NODES ╞═════════════════════════════════
-declare -- ROOT  # Solely used to indicate the root of the AST. Imported by the
-declare -- NODE  #+compiler.
-declare -i _NODE_NUM=0
+declare -g  ROOT  # Solely used to indicate the root of the AST. Imported by the
+declare -g  NODE  #+compiler.
+declare -gi _NODE_NUM=0
 
 # `include` & `constrain` directives are handled by the parser. They don't
 # actually create any "real" nodes. They leave sentinel values that are later
 # resolved.
-declare -- INCLUDE         CONSTRAIN
-declare -A INCLUDES=()     CONSTRAINTS=()
-declare -i INCLUDE_NUM=0   CONSTRAIN_NUM=0
+declare -g  INCLUDE         CONSTRAIN
+declare -gi INCLUDE_NUM=0   CONSTRAIN_NUM=0
+declare -gA INCLUDES=()     CONSTRAINTS=()
+# These -----^ map a section node name to the path to the file they must parse.
+#
+# Example:
+#> INCLUDES=([NODE_01]="./colors.conf"  [NODE_21]="./keybinds.conf")
+#
+# Iterate through the list of INCLUDES. Append all the children of the newly
+# parsed ROOT.children to the key's .children. i.e.,
+#
+#> for parent, path in includes.items():
+#>    root = parse(path)
+#>    for node in root.children:
+#>       parent.children.append(node)
 
 # Saves us from a get_type() function call, or some equivalent.
-declare -A TYPEOF=()
-
+declare -gA TYPEOF=()
 
 function mk_decl_section {
    # 1) create parent
@@ -314,9 +382,9 @@ function mk_identifier {
 
 
 #═══════════════════════════════════╡ utils ╞═══════════════════════════════════
-declare -i IDX=0
-declare -- CURRENT  CURRENT_NAME
-declare -- PEEK     PEEK_NAME
+declare -gi IDX=0
+declare -g  CURRENT  CURRENT_NAME
+declare -g  PEEK     PEEK_NAME
 # Calls to `advance' both globally set the name of the current/next node(s),
 # e.g., `TOKEN_1', as well as declaring a nameref to the variable itself.
 
@@ -839,4 +907,7 @@ parse
    declare -p TYPEOF  ROOT
    declare -p _FILES  _FILE
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
-) | sort -V -k3
+) | sort -V -k3 | sed -E 's;^declare -(-)?;declare -g;'
+# It is possible to not use `sed`, and instead read all the sourced declarations
+# into an array, and parameter substation them with something like:
+#> ${declarations[@]/declare -?(-)/declare -g}
