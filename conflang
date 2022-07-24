@@ -23,7 +23,7 @@ declare -gi _FILE=0
 # respective file. Particularly as the lexer/parser reuse function names like
 #  `advance`, `current`, etc.
 # Only the particular information we *want* to export is.
-function pre_compile {
+function parse {
    source <(
       source <(
          source "${LIBDIR}"/lexer.sh "$INPUT"
@@ -42,7 +42,7 @@ function pre_compile {
    )
 }
 
-pre_compile
+parse
 
 # This isn't spectacular error handling, but it does allow us (for now) to halt
 # execution if the parser hit an error and exploded.

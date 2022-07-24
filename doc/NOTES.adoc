@@ -134,7 +134,10 @@ The parent shell does a `test $SUCCESS == 'true' || exit 1`.
 == Basic grammar
 
 ----
-program        -> declaration EOF
+program        -> statement EOF
+
+statement      -> parser_directive
+                | declaration
 
 declaration    -> section_decl
                 | variable_decl
@@ -155,7 +158,7 @@ array          -> '[' expression* ']'
 
 == Basic syntax
 
-[source,conf]
+[source]
 ----
 untyped {
    key1  "value1";

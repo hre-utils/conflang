@@ -4,7 +4,8 @@
 # by the config file.
 #
 # IMPORTS:
-#  _DATA_*
+#  _DATA_ROOT
+#  _DATA_$n
 
 declare -- RV
 

@@ -7,8 +7,7 @@
 #  _FILES[]             # Array of imported files
 #  _FILE                # Index of current file
 # }
-#
-#
+
 # THINKIES:
 # The global variables need to not reset themselves when called again by
 # constrained/imported functions. Maybe just wrap them in a:
@@ -506,18 +505,6 @@ function statement {
 }
 
 
-function declaration {
-   identifier
-   munch 'IDENTIFIER' "expecting variable declaration."
-
-   if match 'L_BRACE' ; then
-      decl_section
-   else
-      decl_variable
-   fi
-}
-
-
 function parser_directive {
    if match 'INCLUDE' ; then
       include
@@ -535,20 +522,17 @@ function parser_directive {
 
 function include {
    mk_include
-   local -- save=$NODE
    local -n include=$NODE
    
    path
    munch 'PATH' "expecting path after %include."
 
    include=$NODE
-   declare -g NODE=$save
 }
 
 
 function constrain {
    mk_constrain
-   local -- save=$NODE
    local -n constrain=$NODE
 
    while ! check 'R_BRACKET' ; do
@@ -558,7 +542,18 @@ function constrain {
    done
 
    munch 'R_BRACKET' "expecting \`]' after constrain block."
-   declare -g NODE=$save
+}
+
+
+function declaration {
+   identifier
+   munch 'IDENTIFIER' "expecting variable declaration."
+
+   if match 'L_BRACE' ; then
+      decl_section
+   else
+      decl_variable
+   fi
 }
 
 
@@ -573,7 +568,7 @@ function decl_section {
    node[name]=$name
 
    while ! check 'R_BRACE' ; do
-      declaration
+      statement
       items+=( $NODE )
    done
 
@@ -910,4 +905,5 @@ parse
 ) | sort -V -k3 | sed -E 's;^declare -(-)?;declare -g;'
 # It is possible to not use `sed`, and instead read all the sourced declarations
 # into an array, and parameter substation them with something like:
+#> shopt -s extglob
 #> ${declarations[@]/declare -?(-)/declare -g}
