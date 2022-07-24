@@ -4,93 +4,38 @@
 #  TOKENS[]             # Array of token names
 #  TOKEN_$n             # Sequence of all token objects
 #  FILE_LINES[]         # INPUT_FILE.readlines()
-#  _FILES[]             # Array of imported files
-#  _FILE                # Index of current file
+#  FILES[]              # Array of imported files
+#  FILE                 # Index of current file
 # }
 
-# THINKIES:
-# The global variables need to not reset themselves when called again by
-# constrained/imported functions. Maybe just wrap them in a:
-#> [[ $_FILE -eq 0 ]]
-#
-# This will require scanning/parsing the included files. Probably easiests by
-# wrapping the current `source <( source <( ... ))` w/ {lexer,parser}.sh into
-# a function.
-#
-#> function pre_compile {
-#>    source <(
-#>       source <( source lexer.sh "$1" )
-#>    )
-#>    source parser.sh
-#> }
-#>
-#> 
-#> pre_compile
-#> declare -- _root=$ROOT
-#>
-#> for parent_node_name in ${!INCLUDES[@]} ; do
-#>    declare -n parent_node=$parent_node_name
-#>    declare -n parent_items=${parent_node[items]}
-#>
-#>    declare -- path=${INCLUDES[$parent_node_name]
-#>    for f in "${_FILES[@]}" ; do
-#>       [[ "$path" == "$f" ]] && raise 'circular_dependency'
-#>    done
-#>
-#>    _FILES+=( $path )
-#>    _FILE=${#_FILES[@]}
-#>
-#>    pre_compile "$path"
-#>    declare -- child_node_name=$ROOT
-#>    declare -n child_node=$ROOT
-#>
-#>    declare -n items=${child_node[items]}
-#>    for node in "${items[@]}" ; do
-#>       parent_items+=( $node )
-#>    done
-#> done
-#>
-#> ROOT=$_root
-#
-#
-# Turns out the above won't work. Even if you `declare -g` a variable, when
-# dumping it with `declare -p`, it loses the global flag. Would need to regex
-# every declaration to become global upon importing into the function.
-
-# As I think more about it, there's no reason the user needs to source this file
-# itself. Just the resulting data nodes, and the ./api.sh. Their program would
-# begin something like:
-#
-#> conflang "config.cfg" > ./compiled.sh
-#> source ./compiled.sh
-#> source api.sh
-
 #═════════════════════════════════╡ AST NODES ╞═════════════════════════════════
-declare -g  ROOT  # Solely used to indicate the root of the AST. Imported by the
-declare -g  NODE  #+compiler.
-declare -gi _NODE_NUM=0
+# Must only set the node count on the *first* run. Else we'll overwrite every
+# time we import another file.
+if [[ ${#FILES[@]} -eq 1 ]] ; then
+   declare -gi _NODE_NUM=0
+   declare -gi INCLUDE_NUM=0
 
-# `include` & `constrain` directives are handled by the parser. They don't
-# actually create any "real" nodes. They leave sentinel values that are later
-# resolved.
-declare -g  INCLUDE         CONSTRAIN
-declare -gi INCLUDE_NUM=0   CONSTRAIN_NUM=0
-declare -gA INCLUDES=()     CONSTRAINTS=()
-# These -----^ map a section node name to the path to the file they must parse.
-#
-# Example:
-#> INCLUDES=([NODE_01]="./colors.conf"  [NODE_21]="./keybinds.conf")
-#
-# Iterate through the list of INCLUDES. Append all the children of the newly
-# parsed ROOT.children to the key's .children. i.e.,
-#
-#> for parent, path in includes.items():
-#>    root = parse(path)
-#>    for node in root.children:
-#>       parent.children.append(node)
+   # `include` & `constrain` directives are handled by the parser. They don't
+   # actually create any "real" nodes. They leave sentinel values that are later
+   # resolved.
+   declare -ga INCLUDES=() CONSTRAINTS=()
+   # Both hold lists.
+   # Sub-objects:
+   #> INCLUDES=([0]='INCLUDE_1', [1]='INCLUDE_2')
+   #> INCLUDE_1=([path]='./colors.conf' [insert]='NODE_01')
+   #> INCLUDE_1=([path]='./keybinds.conf' [insert]='NODE_25')
+   #>
+   # Raw values:
+   #> CONSTRAINTS=('./subfile1.conf', './subfile2.conf')
 
-# Saves us from a get_type() function call, or some equivalent.
-declare -gA TYPEOF=()
+   # Saves us from a get_type() function call, or some equivalent.
+   declare -gA TYPEOF=()
+fi
+
+# Should be reset on every run, as it's unique to this instance of the parser.
+declare -g  ROOT  # Solely used to indicate the root of the AST.
+declare -g  NODE
+declare -g  INCLUDE
 
 function mk_decl_section {
    # 1) create parent
@@ -116,6 +61,20 @@ function mk_decl_section {
 }
 
 
+function mk_include {
+   (( INCLUDE_NUM++ ))
+   local   --  iname="INCLUDE_${INCLUDE_NUM}"
+   declare -gA $iname
+   declare -g  INCLUDE=$iname
+   local   -n  include=$iname
+
+   include[path]=
+   include[insert]=
+
+   INCLUDES+=( $iname )
+}
+
+
 function mk_decl_variable {
    (( _NODE_NUM++ ))
    local   --  nname="NODE_${_NODE_NUM}"
@@ -129,26 +88,6 @@ function mk_decl_variable {
    node[context]=
    
    TYPEOF[$nname]='decl_variable'
-}
-
-
-function mk_include {
-   (( INCLUDE_NUM++ ))
-   local   -- iname="INCLUDE_${INCLUDE_NUM}"
-   declare -g $iname
-
-   INCLUDES+=( $iname )
-   declare -g INCLUDE=$iname
-}
-
-
-function mk_constrain {
-   (( CONSTRAIN_NUM++ ))
-   local   -- cname="CONSTRAIN_${CONSTRAIN_NUM}"
-   declare -g $cname
-
-   CONSTRAINTS+=( $cname )
-   declare -g CONSTRAIN=$cname
 }
 
 
@@ -478,7 +417,7 @@ function program {
    name[offset]=0
    name[lineno]=0
    name[colno]=0
-   name[file]="${_FILE}"
+   name[file]="${FILE}"
 
    mk_decl_section
    declare -g ROOT=$NODE
@@ -521,13 +460,18 @@ function parser_directive {
 
 
 function include {
+   local -- location=$NODE
+
    mk_include
-   local -n include=$NODE
+   local -n include=$INCLUDE
    
    path
    munch 'PATH' "expecting path after %include."
 
-   include=$NODE
+   local -n path=$NODE
+   include[path]=${path[value]}
+   include[insert]=$location
+
    declare -g NODE=
    # Section declarations loop & append $NODEs to their .items. `include`/
    # `constrain` directives are technically children of a section, but they
@@ -537,13 +481,12 @@ function include {
 
 
 function constrain {
-   mk_constrain
-   local -n constrain=$NODE
-
    while ! check 'R_BRACKET' ; do
       path
       munch 'PATH' "expecting an array of paths."
-      constrain+=( $NODE )
+
+      local -n path=$NODE
+      CONSTRAINTS+=( "${path[value]}" )
    done
 
    munch 'R_BRACKET' "expecting \`]' after constrain block."
@@ -909,11 +852,13 @@ function unary {
 parse
 
 (
-   declare -p TYPEOF  ROOT
-   declare -p _FILES  _FILE
+   declare -p CONSTRAINTS
+   declare -p INCLUDES   INCLUDE_NUM   ${!INCLUDE_*}
+   declare -p TYPEOF     ROOT
+   declare -p FILES      FILE
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
 ) | sort -V -k3 | sed -E 's;^declare -(-)?;declare -g;'
 # It is possible to not use `sed`, and instead read all the sourced declarations
-# into an array, and parameter substation them with something like:
+# into an array as strings, and parameter substitution them with something like:
 #> shopt -s extglob
 #> ${declarations[@]/declare -?(-)/declare -g}

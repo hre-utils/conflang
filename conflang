@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# TODO:
+# Quick nifty idea for printing errors in importing/constraint files. We want
+# to be able to reference them by name, but ideally we want to use the shortest
+# name possible. No sense printing the entire path.
+# If we take all of the file names the user has passed, split them on `/` chars,
+# and check for uniqueness starting from the end. E.g.,
+#> files: [
+#>    /home/aurelius/bin/conf
+#>    /home/aurelius/bin/do_stuff.sh
+#>    /home/marcus/bin/do_stuff.sh
+#> ]
+#>
+#> files[0].split('/')[-1]  is unique
+#> files[1].split('/')[-1]  is NOT unique
+#>
+#> files[1].split('/')[-2:-1]  is unique
+#
+# I guess realistically we're doing a slice from [N:-1], in which `N = -1`,
+# decrementing each time until we find a unique value. We cannot end up with
+# non-unique values, as we'll throw a parse error.
+
+
 declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
 declare -g LIBDIR="${PROGDIR}/lib"
 declare -g INPUT="$1"
@@ -14,10 +36,25 @@ fi
 # re-compile the output.
 # An array of files allows us to map a static file INDEX (stored in the output
 # data), to the possibly dynamic path to the file.
-declare -ga _FILES=( "$INPUT" )
-declare -gi _FILE=0
+declare -ga FILES=( "$INPUT" )
+declare -gi FILE=0
 # This -----^ stores the index of the file we're currently looking at. We can
 # get the path to the current file with ${_FILES[_FILE]}.
+
+
+function deny_circular_imports {
+   # Iter list of currently imported files. Shouldn't ever hit the same file
+   # twice. Esplode if so.
+
+   for f in "${FILES[@]}" ; do
+      if [[ $f == $1 ]] ; then
+         echo "Cannot source $f, circular import." 1>&2
+         # TODO: error reporting
+         exit -1
+      fi
+   done
+}
+
 
 # This toomfoolery is just to isolate all the functions/variables to each
 # respective file. Particularly as the lexer/parser reuse function names like
@@ -26,13 +63,17 @@ declare -gi _FILE=0
 function parse {
    source <(
       source <(
-         source "${LIBDIR}"/lexer.sh "$INPUT"
+         source "${LIBDIR}"/lexer.sh "$1"
          # Exports:
          #  TOKENS[]             # Array of token names
          #  TOKEN_$n             # Sequence of all token objects
-         #  INPUT_FILE           # Name of input file
          #  FILE_LINES[]         # INPUT_FILE.readlines()
       )
+
+      # Since the lexer in run in a subshell (to isolate the name stomping)
+      # we need to global these out here.
+      declare -p FILE_LINES  FILES  FILE |\
+         sed -E 's;^declare -(-)?;declare -g;' 
 
       source "${LIBDIR}"/parser.sh
       # Exports:
@@ -42,7 +83,48 @@ function parse {
    )
 }
 
-parse
+
+# Parse the top-level `base' file.
+parse "$INPUT"
+root=$ROOT
+
+# Parse all `%include` files.
+for insert_node in "${INCLUDES[@]}" ; do
+   declare -n node="$insert_node"
+
+   insert_node_to="${node[insert]}"
+   insert_node_path="${node[path]}"
+
+   # File must exist, must be readable.
+   if [[ ! -r "$insert_node_path" ]] ; then
+      cannot_source+=( $insert_node_path )
+      echo -e "File \`$insert_node_path' not readable"
+      continue
+   fi
+
+   deny_circular_imports "$insert_node_path"
+
+   FILE=${#FILES[@]}
+   FILES+=( $insert_node_path )
+
+   # Generate AST for the imported file.
+   parse "$insert_node_path"
+   declare -n child_root="$ROOT"
+   declare -n items="${child_root[items]}"
+
+   # Pointer to the location into which the imported nodes will be inserted.
+   declare -n insert_node_ptr="$insert_node_to"
+   declare -n insert_node_items="${insert_node_ptr[items]}"
+
+   # Append all imported nodes into the intended section.
+   for child_node in "${items[@]}" ; do
+      insert_node_items+=( "$child_node" )
+   done
+done
+
+# Restore top-level root node.
+ROOT=$root
+
 
 # This isn't spectacular error handling, but it does allow us (for now) to halt
 # execution if the parser hit an error and exploded.
