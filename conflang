@@ -20,6 +20,13 @@
 # I guess realistically we're doing a slice from [N:-1], in which `N = -1`,
 # decrementing each time until we find a unique value. We cannot end up with
 # non-unique values, as we'll throw a parse error.
+#
+#
+# %include and %constrain directives are handled early in the parser, so it's
+# not hitting the tree-walk for semantic checking and whatnot. Need a way of
+# enforcing the user does not pass more than 1 constrain, and only does so in
+# the '%inline' section. Should throw an error if used anywhere else. Perhaps
+# for now also disallow nested %include's.
 
 
 declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
@@ -36,23 +43,45 @@ fi
 # re-compile the output.
 # An array of files allows us to map a static file INDEX (stored in the output
 # data), to the possibly dynamic path to the file.
-declare -ga FILES=( "$INPUT" )
-declare -gi FILE=0
-# This -----^ stores the index of the file we're currently looking at. We can
-# get the path to the current file with ${_FILES[_FILE]}.
+declare -ga FILES=()
 
+function add_file {
+   # Serves to both ensure we don't have circular imports, as well as resolving
+   # relative paths to their fully qualified path.
+   local -- file=$1
 
-function deny_circular_imports {
-   # Iter list of currently imported files. Shouldn't ever hit the same file
-   # twice. Esplode if so.
+   # The 1st call of `add_file()` will have an empty FILES[] array. This only
+   # occurs for the initial file passed in via the CLI. The parent of relative
+   # paths is thus the cwd.
+
+   local -- fq_path=
+   local -- parent
+
+   if [[ "${#FILES[@]}" -gt 0 ]] ; then
+      parent="${FILES[-1]}"
+   else
+      parent="${BASH_SOURCE[0]}"
+   fi
+
+   case "$file" in
+      # Absolute paths.
+      /*)   fq_path="${file}"             ;;
+      ~*)   fq_path="${file/\~/${HOME}}"  ;;
+
+      # Paths relative to the calling file.
+      *)    fq_path=$( realpath -m "$(dirname "${parent}")/${file}" -q )
+            ;;
+   esac
 
    for f in "${FILES[@]}" ; do
-      if [[ $f == $1 ]] ; then
-         echo "Cannot source $f, circular import." 1>&2
+      if [[ "$f" == "$file" ]] ; then
+         echo "Cannot source $file, circular import." 1>&2
          # TODO: error reporting
          exit -1
       fi
    done
+
+   FILES+=( "$fq_path" )
 }
 
 
@@ -63,7 +92,7 @@ function deny_circular_imports {
 function parse {
    source <(
       source <(
-         source "${LIBDIR}"/lexer.sh "$1"
+         source "${LIBDIR}"/lexer.sh
          # Exports:
          #  TOKENS[]             # Array of token names
          #  TOKEN_$n             # Sequence of all token objects
@@ -72,7 +101,7 @@ function parse {
 
       # Since the lexer in run in a subshell (to isolate the name stomping)
       # we need to global these out here.
-      declare -p FILE_LINES  FILES  FILE |\
+      declare -p FILE_LINES  FILES |\
          sed -E 's;^declare -(-)?;declare -g;' 
 
       source "${LIBDIR}"/parser.sh
@@ -85,30 +114,27 @@ function parse {
 
 
 # Parse the top-level `base' file.
-parse "$INPUT"
-root=$ROOT
+add_file "$INPUT"
+
+parse ; root=$ROOT
 
 # Parse all `%include` files.
 for insert_node in "${INCLUDES[@]}" ; do
    declare -n node="$insert_node"
 
-   insert_node_to="${node[insert]}"
+   insert_node_to="${node[target]}"
    insert_node_path="${node[path]}"
 
+   add_file "$insert_node_path"
+
    # File must exist, must be readable.
-   if [[ ! -r "$insert_node_path" ]] ; then
-      cannot_source+=( $insert_node_path )
-      echo -e "File \`$insert_node_path' not readable"
+   if [[ ! -r ${FILES[-1]} ]] ; then
+      echo -e "File \`${FILES[-1]}' not readable or doesn't exist."
       continue
    fi
 
-   deny_circular_imports "$insert_node_path"
-
-   FILE=${#FILES[@]}
-   FILES+=( $insert_node_path )
-
    # Generate AST for the imported file.
-   parse "$insert_node_path"
+   parse
    declare -n child_root="$ROOT"
    declare -n items="${child_root[items]}"
 
@@ -125,6 +151,7 @@ done
 # Restore top-level root node.
 ROOT=$root
 
+declare -p ${!NODE_*} | sort -V -k3
 
 # This isn't spectacular error handling, but it does allow us (for now) to halt
 # execution if the parser hit an error and exploded.
@@ -142,4 +169,3 @@ source "${LIBDIR}"/api.sh
 
 # Example usage:
 #conf 'key' ; echo "${RV@Q}"
-#conf 'global' 'name' ; echo "$RV"

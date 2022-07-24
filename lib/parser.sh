@@ -5,7 +5,6 @@
 #  TOKEN_$n             # Sequence of all token objects
 #  FILE_LINES[]         # INPUT_FILE.readlines()
 #  FILES[]              # Array of imported files
-#  FILE                 # Index of current file
 # }
 
 #═════════════════════════════════╡ AST NODES ╞═════════════════════════════════
@@ -13,7 +12,7 @@
 # time we import another file.
 if [[ ${#FILES[@]} -eq 1 ]] ; then
    declare -gi _NODE_NUM=0
-   declare -gi INCLUDE_NUM=0
+   declare -gi _INCLUDE_NUM=0
 
    # `include` & `constrain` directives are handled by the parser. They don't
    # actually create any "real" nodes. They leave sentinel values that are later
@@ -32,10 +31,21 @@ if [[ ${#FILES[@]} -eq 1 ]] ; then
    declare -gA TYPEOF=()
 fi
 
+# Index of currently parsing file.
+(( FILE_IDX = ${#FILES[@]} - 1 ))
+
 # Should be reset on every run, as it's unique to this instance of the parser.
-declare -g  ROOT  # Solely used to indicate the root of the AST.
-declare -g  NODE
-declare -g  INCLUDE
+declare -g ROOT  # Solely used to indicate the root of the AST.
+declare -g NODE
+declare -g INCLUDE
+
+# Need to take note of the section.
+# `%include` blocks must reference the target Section to include any included
+# sub-nodes.
+# `%constrain` blocks must check they are not placed anywhere but a top-level
+# %inline section.
+declare -g SECTION
+
 
 function mk_decl_section {
    # 1) create parent
@@ -44,6 +54,10 @@ function mk_decl_section {
    declare -gA $nname
    declare -g  NODE=$nname
    local   -n  node=$nname
+
+   # 1.5) set global SECTION pointer here
+   #      for validating %constrain blocks, and setting $target of %include's
+   declare -g  SECTION=$nname
 
    # 2) create list to hold the items within the section.
    (( _NODE_NUM++ ))
@@ -62,8 +76,8 @@ function mk_decl_section {
 
 
 function mk_include {
-   (( INCLUDE_NUM++ ))
-   local   --  iname="INCLUDE_${INCLUDE_NUM}"
+   (( _INCLUDE_NUM++ ))
+   local   --  iname="INCLUDE_${_INCLUDE_NUM}"
    declare -gA $iname
    declare -g  INCLUDE=$iname
    local   -n  include=$iname
@@ -417,7 +431,7 @@ function program {
    name[offset]=0
    name[lineno]=0
    name[colno]=0
-   name[file]="${FILE}"
+   name[file]="${FILE_IDX}"
 
    mk_decl_section
    declare -g ROOT=$NODE
@@ -445,6 +459,7 @@ function statement {
 
 
 function parser_directive {
+   # Saved node referencing the parent Section.
    if match 'INCLUDE' ; then
       include
    elif match 'CONSTRAIN' ; then
@@ -460,8 +475,6 @@ function parser_directive {
 
 
 function include {
-   local -- location=$NODE
-
    mk_include
    local -n include=$INCLUDE
    
@@ -470,7 +483,7 @@ function include {
 
    local -n path=$NODE
    include[path]=${path[value]}
-   include[target]=$location
+   include[target]=$SECTION
 
    declare -g NODE=
    # Section declarations loop & append $NODEs to their .items. `include`/
@@ -481,6 +494,26 @@ function include {
 
 
 function constrain {
+   local -n section_ptr=$SECTION
+   local -n name=${section_ptr[name]}
+
+   if [[ ${name[value]} != '%inline' ]] ; then
+      echo "Constrain blocks may not occur anywhere but the top level" 1>&2
+      # TODO: error reporting
+      exit -1
+      # TODO: error recovery
+      # Probably shouldn't just straight up exit here. Can set flag that we've
+      # hit an error, skip the constrain, and continue parsing.
+   fi
+
+   if [[ "${#CONSTRAINTS[@]}" -gt 0 ]] ; then
+      echo "May not specify multiple constrain blocks." 1>&2
+      # TODO: error reporting
+      exit -1
+      # TODO: error recovery
+   fi
+
+   munch 'L_BRACKET' "expecting \`[' to begin array of paths."
    while ! check 'R_BRACKET' ; do
       path
       munch 'PATH' "expecting an array of paths."
@@ -853,9 +886,9 @@ parse
 
 (
    declare -p CONSTRAINTS
-   declare -p INCLUDES   INCLUDE_NUM   ${!INCLUDE_*}
+   declare -p INCLUDES   ${!INCLUDE_*}
+   declare -p _NODE_NUM  _INCLUDE_NUM
    declare -p TYPEOF     ROOT
-   declare -p FILES      FILE
    [[ -n ${!NODE_*} ]] && declare -p ${!NODE_*}
 ) | sort -V -k3 | sed -E 's;^declare -(-)?;declare -g;'
 # It is possible to not use `sed`, and instead read all the sourced declarations

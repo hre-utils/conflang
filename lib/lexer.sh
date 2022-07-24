@@ -1,6 +1,7 @@
 #!/bin/bash
 
 INPUT_FILE="$1"
+(( FILE_IDX = ${#FILES[@]} - 1 ))
 
 declare -a TOKENS=()
 declare -i _TOKEN_NUM=0
@@ -46,7 +47,7 @@ function Token {
    t[offset]=${FREEZE[offset]}
    t[lineno]=${FREEZE[lineno]}
    t[colno]=${FREEZE[colno]}
-   t[file]="${FILE}"
+   t[file]="${FILE_IDX}"
 
    TOKENS+=( "$tname" ) ; (( _TOKEN_NUM++ ))
    #echo "[${t[lineno]}:${t[colno]}] ${type} [${value}]"
@@ -83,20 +84,16 @@ function advance {
 
 
 function scan {
-   # In case we're reading from stdin. Can capture the output, and re-use both
-   # in the `mapfile` and the `while read`.
-   local input_data=$( cat "$INPUT_FILE" )
-
    # Creating secondary line buffer to do better debug output printing. It would
    # be more efficient to *only* hold a buffer of lines up until each newline.
    # Unpon an error, we'd only need to save the singular line, then can resume
-   mapfile -td $'\n' FILE_LINES <<< "$input_data"
+   mapfile -td $'\n' FILE_LINES < "${FILES[-1]}"
 
    # For easier lookahead, read all characters first into an array. Allows us
    # to seek/index very easily.
    while read -rN1 character ; do
       CHARRAY+=( "$character" )
-   done <<< "$input_data"
+   done < "${FILES[-1]}"
 
    while [[ ${CURSOR[offset]} -lt ${#CHARRAY[@]} ]] ; do
       advance ; [[ -z "$CURRENT" ]] && break
@@ -284,6 +281,6 @@ scan
 # parser. This helps not polute too much the global namespace. Able to just
 # import that which we need.
 (
-   declare -p FILE_LINES  FILES  FILE
+   declare -p FILE_LINES  FILES
    declare -p TOKENS  ${!TOKEN_*}
 ) | sort -V -k3
