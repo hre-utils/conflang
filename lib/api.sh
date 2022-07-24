@@ -15,11 +15,13 @@ function conf {
    while [[ $# -gt 0 ]] ; do
       local -n d=$RV
 
-      # If variable IS UNSET. Will not trigger if variable is SET but EMPTY.
+      # Test if the selector exists. If it's trying to query an index that's
+      # *UNSET*, rather than just declared as an empty string, it explodes.
       if [[ ! "${d[$1]+_}" ]] ; then
-         # Tracebacks would be A+ here.
-         echo "selector '$1' not found ${d[$1]-_}" 1>&2
+         echo "selector '$1' not found." 1>&2
          exit -1
+         # TODO: error reporting
+         # Tracebacks would be A+ here.
       fi
 
       declare -g RV="${d[$1]}"

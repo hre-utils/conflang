@@ -528,6 +528,11 @@ function include {
    munch 'PATH' "expecting path after %include."
 
    include=$NODE
+   declare -g NODE=
+   # Section declarations loop & append $NODEs to their .items. `include`/
+   # `constrain` directives are technically children of a section, but they
+   # do not live past the parser. Need to explicitly set $NODE to an empty
+   # string, so they are not appended to the parent's .items[].
 }
 
 
@@ -542,6 +547,11 @@ function constrain {
    done
 
    munch 'R_BRACKET' "expecting \`]' after constrain block."
+   declare -g NODE=
+   # Section declarations loop & append $NODEs to their .items. `include`/
+   # `constrain` directives are technically children of a section, but they
+   # do not live past the parser. Need to explicitly set $NODE to an empty
+   # string, so they are not appended to the parent's .items[].
 }
 
 

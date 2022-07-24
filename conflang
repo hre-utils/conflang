@@ -60,4 +60,4 @@ source "${LIBDIR}"/api.sh
 
 # Example usage:
 #conf 'key' ; echo "${RV@Q}"
-conf 'global' 'name' ; echo "$RV"
+#conf 'global' 'name' ; echo "$RV"
