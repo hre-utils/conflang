@@ -22,8 +22,8 @@ if [[ ${#FILES[@]} -eq 1 ]] ; then
    # Both hold lists.
    # Sub-objects:
    #> INCLUDES=([0]='INCLUDE_1', [1]='INCLUDE_2')
-   #> INCLUDE_1=([path]='./colors.conf' [insert]='NODE_01')
-   #> INCLUDE_1=([path]='./keybinds.conf' [insert]='NODE_25')
+   #> INCLUDE_1=([path]='./colors.conf' [target]='NODE_01')
+   #> INCLUDE_1=([path]='./keybinds.conf' [target]='NODE_25')
    #>
    # Raw values:
    #> CONSTRAINTS=('./subfile1.conf', './subfile2.conf')
@@ -69,7 +69,7 @@ function mk_include {
    local   -n  include=$iname
 
    include[path]=
-   include[insert]=
+   include[target]=
 
    INCLUDES+=( $iname )
 }
@@ -470,7 +470,7 @@ function include {
 
    local -n path=$NODE
    include[path]=${path[value]}
-   include[insert]=$location
+   include[target]=$location
 
    declare -g NODE=
    # Section declarations loop & append $NODEs to their .items. `include`/
