@@ -21,7 +21,6 @@
 # decrementing each time until we find a unique value. We cannot end up with
 # non-unique values, as we'll throw a parse error.
 
-
 declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
 declare -g LIBDIR="${PROGDIR}/lib"
 declare -g INPUT="$1"
@@ -38,22 +37,32 @@ fi
 # data), to the possibly dynamic path to the file.
 declare -ga FILES=()
 
+# Stores the $ROOT after each `parse()`. The idx of a root node here should
+# correspond to it's matching INCLUDE_$n from the INCLUDES[] array. Example:
+#> INCLUDE_ROOT [ NODE_10,    NODE_20    ]
+#> INCLUDES     [ INCLUDE_01, INCLUDE_02 ]
+# Meaning...
+# Take the contents of INCLUDE_ROOT[0].items, and drop them into
+# INCLUDES[0].target.items.
+declare -a INCLUDE_ROOT=()
+
+
 function add_file {
    # Serves to both ensure we don't have circular imports, as well as resolving
    # relative paths to their fully qualified path.
    local -- file=$1
 
-   # The 1st call of `add_file()` will have an empty FILES[] array. This only
-   # occurs for the initial file passed in via the CLI. The parent of relative
-   # paths is thus the cwd.
-
-   local -- fq_path=
+   # The full, absolute path to the file.
+   local -- fq_path 
    local -- parent
 
+   # The 1st call of `add_file()` will have an empty FILES[] array.
    if [[ "${#FILES[@]}" -gt 0 ]] ; then
-      parent="${FILES[-1]}"
+      parent="${FILES[-1]%/*}"
    else
-      parent="${BASH_SOURCE[0]}"
+      # If there's nothing in FILES[], it's our first run. Any path that's
+      # relative is inherently relative to our current working directory.
+      parent=$( dirname "${BASH_SOURCE[0]%/*}" )
    fi
 
    case "$file" in
@@ -62,7 +71,7 @@ function add_file {
       ~*)   fq_path="${file/\~/${HOME}}"  ;;
 
       # Paths relative to the calling file.
-      *)    fq_path=$( realpath -m "$(dirname "${parent}")/${file}" -q )
+      *)    fq_path=$( realpath -m "${parent}/${file}" -q )
             ;;
    esac
 
@@ -75,6 +84,90 @@ function add_file {
    done
 
    FILES+=( "$fq_path" )
+}
+
+
+function merge_includes {
+   # Parse all `%include` files.
+   # For some reason a standard for loop won't let me modify the loop itself while
+   # iterating through it. Options are either a while loop, or a C-style for loop.
+   local -i idx
+   while [[ idx -lt ${#INCLUDES[@]} ]] ; do
+      local -- insert_node=${INCLUDES[idx]}
+      local -n node="$insert_node"
+
+      insert_node_to="${node[target]}"
+      insert_node_path="${node[path]}"
+
+      add_file "$insert_node_path"
+
+      # File must exist, must be readable.
+      if [[ ! -r "${FILES[-1]}" ]] ; then
+         echo -e "File \`${FILES[-1]}' not readable or doesn't exist."
+         continue
+      fi
+
+      # Generate AST for the imported file.
+      parse
+
+      # Construct array (backwards) of the $ROOT nodes for each %include statement.
+      # Allows us to iter the INCLUDES backwards, and match $idx to its
+      # corresponding root here.
+      INCLUDE_ROOT=( "$ROOT" ${INCLUDE_ROOT[@]} )
+
+      (( idx++ ))
+   done
+
+   # Iterates bottom-to-top over the %include statements. Appends the 
+   local -i len=${#INCLUDES[@]}
+   for (( idx = (len - 1); idx >= 0; idx-- )) ; do
+      local -- include_name=${INCLUDES[idx]}
+      local -n include_node=${include_name}
+      # e.g., INCLUDE_1(path: './colors.conf', target: NODE_2)
+
+      local -n target_node=${include_node[target]}
+      local -n target_items=${target_node[items]}
+      # e.g., NODE_2(items: NODE_3, name: NODE_1)
+      #       target_items = NODE_3[]
+
+      local -- root_name=${INCLUDE_ROOT[idx]}
+      local -n root_node=${root_name}
+      local -n root_items=${root_node[items]}
+      # e.g., INCLUDE_ROOT[idx] = NODE_16
+      #       NODE_16(items: NODE_17, name: NODE_15)
+      #       root_items = NODE_17[]
+
+      # For each node in the sub-file, append it to the targetted node's .items[].
+      for n in "${root_items[@]}" ; do
+         target_items+=( $n )
+      done
+   done
+}
+
+
+function identify_constraint_file {
+   local -- fq_path
+   local -- constrain_file
+
+   for file in "${CONSTRAINTS[@]}" ; do
+      case "$file" in
+         /*)   fq_path="${file}"            ;;
+         ~*)   fq_path="${file/\~/${HOME}}" ;;
+         *)    fq_path=$( realpath -m "${INPUT%/*}/${file}" -q ) ;;
+      esac
+      [[ -f "$fq_path" ]] && constrain_file="$fq_path"
+   done
+
+   for f in "${FILES[@]}" ; do
+      if [[ "$f" == "$constrain_file" ]] ; then
+         echo "\`$f' may not be both a %constrain and %include" 1>&2
+         # TODO: error recovery
+         exit -1
+         # TODO: error reporting
+      fi
+   done
+
+   declare -g FILES+=( "$constrain_file" )
 }
 
 
@@ -105,81 +198,35 @@ function parse {
    )
 }
 
-
 # Parse the top-level `base' file.
 add_file "$INPUT"
-parse ; root=$ROOT
+parse ; parent_root=$ROOT
+merge_includes
+# Merge all (potentially nested) `%include` statements from the parent file.
 
-# Stores the $ROOT after each `parse()`. The idx of a root node here should
-# correspond to it's matching INCLUDE_$n from the INCLUDES[] array. Example:
-#> INCLUDE_ROOT : [ NODE_10,    NODE_20]
-#> INCLUDES     : [ INCLUDE_01, INCLUDE_02]
-# Meaning...
-# Take the contents of INCLUDE_ROOT[0].items, and drop them into
-# INCLUDES[0].target.items.
-declare -a INCLUDE_ROOT=()
+# Reset INCLUDE_ROOT[] and INCLUDES[] before parsing the constrain'd file(s).
+declare -a INCLUDE_ROOT=()  INCLUDES=()
 
-# Parse all `%include` files.
-# For some reason a standard for loop won't let me modify the loop itself while
-# iterating through it. Options are either a while loop, or a C-style for loop.
-declare -i idx
-while [[ idx -lt ${#INCLUDES[@]} ]] ; do
-   declare -- insert_node=${INCLUDES[idx]}
-   declare -n node="$insert_node"
+_f0=${#FILES[@]}
+identify_constraint_file 
+_f1=${#FILES[@]}
 
-   insert_node_to="${node[target]}"
-   insert_node_path="${node[path]}"
-
-   add_file "$insert_node_path"
-
-   # File must exist, must be readable.
-   if [[ ! -r "${FILES[-1]}" ]] ; then
-      echo -e "File \`${FILES[-1]}' not readable or doesn't exist."
-      continue
-   fi
-
-   # Generate AST for the imported file.
-   parse
-
-   # Construct array (backwards) of the $ROOT nodes for each %include statement.
-   # Allows us to iter the INCLUDES backwards, and match $idx to its
-   # corresponding root here.
-   INCLUDE_ROOT=( "$ROOT" ${INCLUDE_ROOT[@]} )
-
-   (( idx++ ))
-done
-
-# Iterates bottom-to-top over the %include statements. Appends the 
-len=${#INCLUDES[@]}
-for (( idx = (len - 1); idx >= 0; idx-- )) ; do
-   declare -- include_name=${INCLUDES[idx]}
-   declare -n include_node=${include_name}
-   # e.g., INCLUDE_1(path: './colors.conf', target: NODE_2)
-
-   declare -n target_node=${include_node[target]}
-   declare -n target_items=${target_node[items]}
-   # e.g., NODE_2(items: NODE_3, name: NODE_1)
-   #       target_items = NODE_3[]
-
-   declare -- root_name=${INCLUDE_ROOT[idx]}
-   declare -n root_node=${root_name}
-   declare -n root_items=${root_node[items]}
-   # e.g., INCLUDE_ROOT[idx] = NODE_16
-   #       NODE_16(items: NODE_17, name: NODE_15)
-   #       root_items = NODE_17[]
-
-   # For each node in the sub-file, append it to the targetted node's .items[].
-   for n in "${root_items[@]}" ; do
-      target_items+=( $n )
-   done
-done
+# This is a little nonsense, but it saves us from creating another global var
+# to track if we've hit a valid child file. `identify_constraint_file()` adds
+# the file to the global FILES[] array. Thus, if array is not of the same len,
+# we added a file. Don't want to parse an additional time if it's not needed.
+if [[ ${_f0} != ${_f1} ]] ; then
+   # Now parse all the sub-files we're imposing constraints upon.
+   parse ; child_root=$ROOT
+   merge_includes
+   # Merge all (potentially nested) `%include` statements from the child file.
+fi
 
 # Restore top-level root node.
-ROOT=$root
+ROOT=$parent_root
 
-# This isn't spectacular error handling, but it does allow us (for now) to halt
-# execution if the parser hit an error and exploded.
-[[ -z ${!NODE_*} ]] && exit 1
+# DEBUGGING:
+#declare -p ${!NODE_*} | sort -V -k3
 
 source "${LIBDIR}"/compiler.sh
 # Exports (USER ACCESSIBLE):
@@ -192,4 +239,4 @@ source "${LIBDIR}"/api.sh
 #  conf()
 
 # Example usage:
-#conf 'key' ; echo "${RV@Q}"
+#conf 'global' 'global' 'global' 'key' ; echo "${RV@Q}"
