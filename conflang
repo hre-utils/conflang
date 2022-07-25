@@ -20,13 +20,6 @@
 # I guess realistically we're doing a slice from [N:-1], in which `N = -1`,
 # decrementing each time until we find a unique value. We cannot end up with
 # non-unique values, as we'll throw a parse error.
-#
-#
-# %include and %constrain directives are handled early in the parser, so it's
-# not hitting the tree-walk for semantic checking and whatnot. Need a way of
-# enforcing the user does not pass more than 1 constrain, and only does so in
-# the '%inline' section. Should throw an error if used anywhere else. Perhaps
-# for now also disallow nested %include's.
 
 
 declare -g PROGDIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" ; pwd )
@@ -117,18 +110,25 @@ function parse {
 add_file "$INPUT"
 parse ; root=$ROOT
 
-# Maps an INCLUDE_$n node to the location of it's NODE_$n root. Allows us to go
-# back after an initial pass, and complete the merge.
-declare -A INCLUDE_ROOTS=()
+# Stores the $ROOT after each `parse()`. The idx of a root node here should
+# correspond to it's matching INCLUDE_$n from the INCLUDES[] array. Example:
+#> INCLUDE_ROOT : [ NODE_10,    NODE_20]
+#> INCLUDES     : [ INCLUDE_01, INCLUDE_02]
+# Meaning...
+# Take the contents of INCLUDE_ROOT[0].items, and drop them into
+# INCLUDES[0].target.items.
+declare -a INCLUDE_ROOT=()
 
 # Parse all `%include` files.
-for insert_node in "${INCLUDES[@]}" ; do
+# For some reason a standard for loop won't let me modify the loop itself while
+# iterating through it. Options are either a while loop, or a C-style for loop.
+declare -i idx
+while [[ idx -lt ${#INCLUDES[@]} ]] ; do
+   declare -- insert_node=${INCLUDES[idx]}
    declare -n node="$insert_node"
 
    insert_node_to="${node[target]}"
    insert_node_path="${node[path]}"
-
-   INCLUDE_ROOTS[$insert_node]=$ROOT
 
    add_file "$insert_node_path"
 
@@ -141,40 +141,41 @@ for insert_node in "${INCLUDES[@]}" ; do
    # Generate AST for the imported file.
    parse
 
-   #declare -n child_root="$ROOT"
-   #declare -n items="${child_root[items]}"
+   # Construct array (backwards) of the $ROOT nodes for each %include statement.
+   # Allows us to iter the INCLUDES backwards, and match $idx to its
+   # corresponding root here.
+   INCLUDE_ROOT=( "$ROOT" ${INCLUDE_ROOT[@]} )
 
-   ## Pointer to the location into which the imported nodes will be inserted.
-   #declare -n insert_node_ptr="$insert_node_to"
-   #declare -n insert_node_items="${insert_node_ptr[items]}"
-
-   ## Append all imported nodes into the intended section.
-   #for child_node in "${items[@]}" ; do
-   #   insert_node_items+=( "$child_node" )
-   #done
+   (( idx++ ))
 done
 
+# Iterates bottom-to-top over the %include statements. Appends the 
+len=${#INCLUDES[@]}
+for (( idx = (len - 1); idx >= 0; idx-- )) ; do
+   declare -- include_name=${INCLUDES[idx]}
+   declare -n include_node=${include_name}
+   # e.g., INCLUDE_1(path: './colors.conf', target: NODE_2)
 
-#declare -p INCLUDE_ROOTS | sort -k3 -V
-#declare -p ${!INCLUDE*}
+   declare -n target_node=${include_node[target]}
+   declare -n target_items=${target_node[items]}
+   # e.g., NODE_2(items: NODE_3, name: NODE_1)
+   #       target_items = NODE_3[]
 
+   declare -- root_name=${INCLUDE_ROOT[idx]}
+   declare -n root_node=${root_name}
+   declare -n root_items=${root_node[items]}
+   # e.g., INCLUDE_ROOT[idx] = NODE_16
+   #       NODE_16(items: NODE_17, name: NODE_15)
+   #       root_items = NODE_17[]
+
+   # For each node in the sub-file, append it to the targetted node's .items[].
+   for n in "${root_items[@]}" ; do
+      target_items+=( $n )
+   done
+done
 
 # Restore top-level root node.
 ROOT=$root
-
-#len=${#INCLUDE_ROOTS[@]}
-#for (( idx = (len - 1); idx < len; idx-- )) ; do
-#   declare -- insert_name=${INCLUDE_ROOTS[idx]}
-#   declare -n parent_node=${INCLUDE_ROOTS[insert_name]}
-#   declare -n parent_items=${insert_root[items]}
-#
-#   declare -n insert_node=$insert_name
-#   declare -n insert_items=${insert_node[items]}
-#
-#   for n in "${insert_items[@]}" ; do
-#      insert_items+=( $n )
-#   done
-#done
 
 # This isn't spectacular error handling, but it does allow us (for now) to halt
 # execution if the parser hit an error and exploded.
