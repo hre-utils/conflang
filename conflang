@@ -115,8 +115,11 @@ function parse {
 
 # Parse the top-level `base' file.
 add_file "$INPUT"
-
 parse ; root=$ROOT
+
+# Maps an INCLUDE_$n node to the location of it's NODE_$n root. Allows us to go
+# back after an initial pass, and complete the merge.
+declare -A INCLUDE_ROOTS=()
 
 # Parse all `%include` files.
 for insert_node in "${INCLUDES[@]}" ; do
@@ -125,33 +128,53 @@ for insert_node in "${INCLUDES[@]}" ; do
    insert_node_to="${node[target]}"
    insert_node_path="${node[path]}"
 
+   INCLUDE_ROOTS[$insert_node]=$ROOT
+
    add_file "$insert_node_path"
 
    # File must exist, must be readable.
-   if [[ ! -r ${FILES[-1]} ]] ; then
+   if [[ ! -r "${FILES[-1]}" ]] ; then
       echo -e "File \`${FILES[-1]}' not readable or doesn't exist."
       continue
    fi
 
    # Generate AST for the imported file.
    parse
-   declare -n child_root="$ROOT"
-   declare -n items="${child_root[items]}"
 
-   # Pointer to the location into which the imported nodes will be inserted.
-   declare -n insert_node_ptr="$insert_node_to"
-   declare -n insert_node_items="${insert_node_ptr[items]}"
+   #declare -n child_root="$ROOT"
+   #declare -n items="${child_root[items]}"
 
-   # Append all imported nodes into the intended section.
-   for child_node in "${items[@]}" ; do
-      insert_node_items+=( "$child_node" )
-   done
+   ## Pointer to the location into which the imported nodes will be inserted.
+   #declare -n insert_node_ptr="$insert_node_to"
+   #declare -n insert_node_items="${insert_node_ptr[items]}"
+
+   ## Append all imported nodes into the intended section.
+   #for child_node in "${items[@]}" ; do
+   #   insert_node_items+=( "$child_node" )
+   #done
 done
+
+
+#declare -p INCLUDE_ROOTS | sort -k3 -V
+#declare -p ${!INCLUDE*}
+
 
 # Restore top-level root node.
 ROOT=$root
 
-declare -p ${!NODE_*} | sort -V -k3
+#len=${#INCLUDE_ROOTS[@]}
+#for (( idx = (len - 1); idx < len; idx-- )) ; do
+#   declare -- insert_name=${INCLUDE_ROOTS[idx]}
+#   declare -n parent_node=${INCLUDE_ROOTS[insert_name]}
+#   declare -n parent_items=${insert_root[items]}
+#
+#   declare -n insert_node=$insert_name
+#   declare -n insert_items=${insert_node[items]}
+#
+#   for n in "${insert_items[@]}" ; do
+#      insert_items+=( $n )
+#   done
+#done
 
 # This isn't spectacular error handling, but it does allow us (for now) to halt
 # execution if the parser hit an error and exploded.
